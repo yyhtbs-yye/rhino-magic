@@ -2,6 +2,7 @@
 chpt_bkups/
 data/
 work_dirs/
+work_dirs
 vision_diffuser.egg-info/
 __pycache__/
 *.pyc
