@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rhino-magic"
+version = "0.1.0"
+description = "Image Data Processing Tools"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+]
+
+[project.optional-dependencies]
+rhino = [  # rhino dependency
+]
+trainer = [  # Trainer-specific dependency
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rhino", "trainer"]  # Explicitly include the diffusion and trainer packages

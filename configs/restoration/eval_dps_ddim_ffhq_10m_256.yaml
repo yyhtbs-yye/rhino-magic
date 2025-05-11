@@ -1,0 +1,135 @@
+boat:
+  type: SR-DPS
+
+  model:
+    path: 'rhino.diffusers.networks.kaist_dps.unet'   # Path to import the model class
+    name: 'UNetModel'              # Name of the model class to use
+    config:
+      image_size: 256
+      num_channels: 128
+      num_res_blocks: 1
+      channel_mult: ""
+      learn_sigma: True
+      class_cond: False
+      use_checkpoint: False
+      attention_resolutions: 16
+      num_heads: 4
+      num_head_channels: 64
+      num_heads_upsample: -1
+      use_scale_shift_norm: True
+      dropout: 0.0
+      resblock_updown: True
+      use_fp16: False
+      use_new_attention_order: False
+      checkpoint_path: "pretrained/ffhq_10m.pt"
+
+  # Scheduler configuration
+  scheduler:
+    path: 'rhino.diffusers.schedulers.scheduling_ddim'           # Path to import the model class
+    name: 'DDIMScheduler'         # Name of the model class to use
+    config:
+      beta_start: 0.0001
+      beta_end: 0.02
+      beta_schedule: "linear"
+      steps_offset: 1
+      clip_sample: false
+      set_alpha_to_one: false
+      prediction_type: "epsilon"
+      num_train_timesteps: 1000
+
+  solver:
+    path: 'diffusion.solvers.guided_ddim'           # Path to import the model class
+    name: 'DPSConditionedSampler'         # Name of the model class to use
+    config:
+      beta_start: 0.0001
+      beta_end: 0.02
+      beta_schedule: "linear"
+      steps_offset: 1
+      clip_sample: false
+      set_alpha_to_one: false
+      prediction_type: "epsilon"
+      num_train_timesteps: 1000
+      eta: 0.0                   # Parameter controlling noise level in sampling
+      num_inference_steps: 50    # Default sampling steps for inference
+      operator:                       # Super resolution operator
+        path: 'diffusion.distortions.linear_ops'
+        name: 'SuperResolutionOperator'
+        config:
+          params:
+            scale_factor: 4.0
+            mode: 'bicubic'
+
+# Validation configuration
+validation:
+  save_images: true
+  num_vis_samples: 4          # Number of samples to visualize during validation
+  metrics:
+    use_fid: false
+    custom_metrics: {}        # Optional custom metrics can be defined here
+
+# Data configuration
+data:
+  # train_dataloader:
+  #   dataset:
+  #     path: 'diffusion.torch_datasets.basic_image_dataset'           # Path to import the model class
+  #     name: 'BasicImageDataset'         # Name of the model class to use
+  #     config:
+  #       folder_paths:
+  #         gt: data/ffhq/ffhq_imgs/ffhq_128
+  #         lq: data/ffhq/ffhq_imgs/ffhq_16
+  #       data_prefix:
+  #         gt: ''
+  #         lq: ''
+  #       pipeline:
+  #         - type: LoadImageFromFile
+  #           keys: [gt, lq]
+  #         - type: Normalize
+  #           keys: [gt, lq]
+  #           mean: [0.5, 0.5, 0.5]
+  #           std: [0.5, 0.5, 0.5]
+  #   batch_size: 32
+  #   num_workers: 8
+  #   persistent_workers: true
+  #   sampler:
+  #     type: DefaultSampler
+  #     shuffle: true
+
+  # Validation dataloader configuration
+  # Validation dataloader configuration
+  val_dataloader:
+    dataset:
+      path: 'diffusion.torch_datasets.basic_image_dataset'           # Path to import the model class
+      name: 'BasicImageDataset'         # Name of the model class to use
+      config:
+        folder_paths:
+          gt: data/celeba/subsets/celeba_256
+          lq: data/celeba/subsets/celeba_64
+        data_prefix:
+          gt: ''
+          lq: ''
+        pipeline:
+          - type: LoadImageFromFile
+            keys: [gt, lq]
+          - type: Normalize
+            keys: [gt, lq]
+            mean: [0.5, 0.5, 0.5]
+            std: [0.5, 0.5, 0.5]
+    batch_size: 4
+    num_workers: 8
+    persistent_workers: true
+    sampler:
+      type: DefaultSampler
+      shuffle: true
+
+# Logging configuration
+logging:
+  root_dir: work_dirs/dps_sr
+  experiment_name: dps_sr_64
+  log_every_n_steps: 50
+
+# Checkpoint configuration
+checkpoint:
+  save_best_metric: 'val/noise_mse'  # Changed from latent_mse to img_mse
+  save_best_mode: 'min'            # 'min' for loss metrics
+  save_top_k: 3                    # Number of best checkpoints to keep
+  save_last: true                  # Whether to save the last checkpoint

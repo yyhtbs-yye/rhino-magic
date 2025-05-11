@@ -1,0 +1,36 @@
+_import: configs/base/train_base_sr3.yaml
+
+boat:
+  path: 'rhino.diffusers.boats.conditioned.latent_diffusing'
+  name: 'ConditionedLatentDiffusionBoat'            
+
+  encoder:
+    path: 'rhino.autoencoders.networks.autoencoder_wrappers' 
+    name: 'AutoencoderKLWrapper'
+    pretrained: 'stabilityai/sd-vae-ft-mse'
+
+  context_encoder:
+    path: torch.nn
+    name: Identity
+    params: {}
+
+_vars:
+
+  device: 'cuda:2'
+
+  sample_channels: 4
+  condition_channels: 3
+  out_channels: 4
+  sample_size: [256, 256]
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_256
+    ctx: data/ffhq/ffhq_imgs/ffhq_32
+    
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_256
+    ctx: data/celeba/subsets/celeba_32
+
+  experiment_name: sr3_unet_ldm_ffhq_32_256
+
+  ema_start: 0
