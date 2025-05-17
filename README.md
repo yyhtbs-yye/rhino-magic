@@ -30,7 +30,11 @@ rhino-magic/
 
 ### Prerequisites
 
-* Python 3.7 or higher
+* Python 3.11
+* Pytorch 2.2.1
+* Diffusers 0.33.1
+* Numpy >=1.24.4
+
 * Recommended: Create a virtual environment
 
 ### Installation
@@ -68,8 +72,8 @@ Example configuration file: `configs/example_config.yaml`
 
 This model mimics the torch lightning framework, but not compatible. It aims to support more complex but regulated training/inference logics. Below are some key concepts in this framework.
 
-BOAT: [readmes/what-is-boat.md](What is Boat?)
-CONFIG: [readmes/config-design.md](A bit about the configs)
+**BOAT**: [What is Boat?](readmes/what-is-boat.md)  
+**CONFIG**: [A Bit About the Configs](readmes/config-design.md)
 
 ---
 
