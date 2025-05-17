@@ -67,24 +67,8 @@ class TensorBoardLogger:
                 v = v.item()
                 
             tag = f"{prefix}/{k}" if prefix else k
-            self.writer.add_scalar(tag, v, step)
-    
-    def log_metric(self, metric, step=None, prefix=""):
-        """
-        Log metrics dictionary.
-        
-        Args:
-            metrics (dict): Dictionary with metric names as keys and values as values
-            step (int, optional): Global step value
-            prefix (str, optional): Prefix to add to each metric name
-        """
-        for k, v in metrics.items():
-            if isinstance(v, torch.Tensor):
-                v = v.item()
-                
-            tag = f"{prefix}/{k}" if prefix else k
-            self.writer.add_scalar(tag, v, step)
-
+            self.writer.add_scalar(tag, v, step)                
+            
     def log_image(self, tag, img_tensor, step=None, dataformats='CHW'):
         """
         Log images to tensorboard.
@@ -94,6 +78,9 @@ class TensorBoardLogger:
             img_tensor (torch.Tensor or numpy.ndarray): Image data
             step (int, optional): Global step value
         """
+        if isinstance(img_tensor, torch.Tensor):
+            img_tensor = img_tensor.detach().cpu()
+
         self.writer.add_image(tag, img_tensor, step, dataformats=dataformats)
     
     def log_histogram(self, tag, values, step=None, bins='tensorflow'):
@@ -139,3 +126,7 @@ class TensorBoardLogger:
             self.close()
         except:
             pass
+
+    # In TensorBoardLogger
+    def flush(self):
+        self.writer.flush()

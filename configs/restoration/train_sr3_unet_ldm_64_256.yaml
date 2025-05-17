@@ -11,27 +11,28 @@ boat:
 
   context_encoder:
     path: torch.nn
-    name: Identity
-    params: {}
+    name: PixelUnshuffle
+    params: 
+      downscale_factor: 2   # 64 -> 32
 
 _vars:
 
-  device: 'cuda:2'
+  device: 'cuda:3'
 
   sample_channels: 4
-  condition_channels: 3
+  condition_channels: 12    # 3 * 2 * 2 (downscale_factor: 2)
   out_channels: 4
   sample_size: [256, 256]
-  batch_size: 32
+  batch_size: 128
 
   train_folder_paths:
     gt: data/ffhq/ffhq_imgs/ffhq_256
-    ctx: data/ffhq/ffhq_imgs/ffhq_32
+    ctx: data/ffhq/ffhq_imgs/ffhq_64
     
   valid_folder_paths:
     gt: data/celeba/subsets/celeba_256
-    ctx: data/celeba/subsets/celeba_32
+    ctx: data/celeba/subsets/celeba_64
 
-  experiment_name: sr3_unet_ldm_ffhq_32_256
+  experiment_name: sr3_unet_ldm_ffhq_64_256
 
   ema_start: 0

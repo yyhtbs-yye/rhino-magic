@@ -97,7 +97,7 @@ class ConditionedPixelDiffusionBoat(BaseDiffusionBoat):
 
             named_imgs = {'groundtruth': x1, 'generated': hx1,}
             if self.use_reference:
-                named_imgs['reference'] = encoder_hidden_states
+                named_imgs['reference'] = c
 
             self._visualize_validation(named_imgs, batch_idx)
 

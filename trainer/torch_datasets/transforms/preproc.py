@@ -58,21 +58,23 @@ class Normalize:
     
     def __init__(self, keys, mean, std):
         self.keys = keys
-        self.mean = mean
-        self.std = std
+        self.mean = torch.tensor(mean, dtype=torch.float32).view(-1, 1, 1)
+        self.std = torch.tensor(std, dtype=torch.float32).view(-1, 1, 1)
         
     def __call__(self, results):
+        
         for key in self.keys:
             if key not in results:
                 continue
                 
             img = results[key]
             
-            # Simple normalization for tensor in CHW format
-            mean = torch.tensor(self.mean, dtype=torch.float32, device=img.device).view(-1, 1, 1)
-            std = torch.tensor(self.std, dtype=torch.float32, device=img.device).view(-1, 1, 1)
-            img = (img - mean) / std
-            
-            results[key] = img
+            if self.mean.device != img.device:
+                self.mean = self.mean.to(img.device)
+                self.std = self.std.to(img.device)
+
+            # Use in-place operations where possible
+            results[key] = (img - self.mean) / self.std
+
                 
         return results

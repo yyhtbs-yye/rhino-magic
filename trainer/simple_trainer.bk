@@ -1,14 +1,9 @@
 import torch
-import psutil
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
 
-def get_ram_info():
-    # Get RAM statistics
-    ram = psutil.virtual_memory()
-    # Return used memory in GB and percentage
-    return f"RAM: {ram.used/1073741824:.1f}GB/{ram.total/1073741824:.1f}GB ({ram.percent}%)"
+from trainer.debuggers.memory_snapshot import MemorySnapshot, analyze_leaking_type
 
 class Trainer:
     def __init__(
@@ -50,61 +45,66 @@ class Trainer:
         self.valid_epoch_records = {}
 
 
-    def fit(self, data_module):
+    def fit(self, data_module, memory_debug=True):
+
+        # Initialize memory tracker
+        memory_tracker = MemorySnapshot()
 
         self.boat.to(self.device)
 
-        for cb in self.callbacks:
-            cb.on_train_start(self, self.boat)
-
         for epoch in range(self.start_epoch, self.max_epochs):
 
-            for cb in self.callbacks:
-                cb.on_epoch_start(self, self.boat, epoch)
-
             self.boat.train()
-
+            
             total_batches = len(data_module.train) if hasattr(data_module.train, '__len__') else None
+
+            if memory_debug:
+                epoch_snapshot = memory_tracker.take_snapshot(f"Epoch {epoch}, start")
+                # Compare current start with previous end snapshot if it exists
+                if 'prev_end_snapshot' in locals():
+                    print("\n==== Memory tracking details (prev end to current start) ====")
+                    type_diffs = memory_tracker.compare_snapshots(prev_end_snapshot, epoch_snapshot)
+                    
+                    leaking_types = [t for t, _, _, d in type_diffs if d > 100]  # Types with 100+ increase
+                    if leaking_types:
+                        print("\nDetailed analysis of leaking types:")
+                        for leak_type in leaking_types[:3]:  # Analyze top 3 leakers
+                            analyze_leaking_type(leak_type)
 
             for batch_idx, batch in tqdm(enumerate(data_module.train),
                                          total=total_batches,
                                          desc=f"Epoch {epoch}  |  {datetime.now():%Y-%m-%d %H:%M:%S}",
                                          unit="batch"):
-                
+
                 if batch_idx == 0 and epoch == self.start_epoch and self.resume_from:
                     self.global_step -= 1  # Adjust for resuming
                 self.global_step += 1
 
                 batch = self._move_batch_to_device(batch)
 
-                for cb in self.callbacks:
-                    cb.on_batch_start(self, self.boat, batch, batch_idx)
-
                 loss = self.boat.training_step(batch, batch_idx)
 
-                self.boat.lr_scheduling_step() 
-
-                for cb in self.callbacks:
-                    cb.on_batch_end(self, self.boat, batch, batch_idx, loss)
-
-                if self.val_check_steps is not None and self.global_step % self.val_check_steps == 0:
-                    avg_loss = self._run_validation(data_module.valid, self.global_step, None)
-                    self.valid_step_records[self.global_step] = {'avg_loss': avg_loss}
-
-                if self.state_save_steps is not None and self.global_step % self.state_save_steps == 0:
-                    state_path = self.boat.save_state(self.run_folder, 'boat_state', global_step=self.global_step+1, epoch=epoch)
-                    
-                    if self.global_step not in self.valid_step_records:
-                        self.valid_step_records[self.global_step] = {}
-                    self.valid_step_records[self.global_step]['state_path'] = state_path
-
-                self.logger.flush()
+            if memory_debug:
+                current_end_snapshot = memory_tracker.take_snapshot(f"Epoch {epoch}, end")
+                # Compare current end with current start
+                print("\n==== Memory tracking details (current start to current end) ====")
+                type_diffs = memory_tracker.compare_snapshots(epoch_snapshot, current_end_snapshot)
+                
+                leaking_types = [t for t, _, _, d in type_diffs if d > 100]  # Types with 100+ increase
+                if leaking_types:
+                    print("\nDetailed analysis of leaking types:")
+                    for leak_type in leaking_types[:3]:  # Analyze top 3 leakers
+                        analyze_leaking_type(leak_type)
+                prev_end_snapshot = current_end_snapshot
             
-            print(f"epoch {epoch} has been ended, postfix = {get_ram_info()}")
+            self.boat.lr_scheduling_step() 
 
-            if self.val_check_epochs is not None and epoch % self.val_check_epochs == 0:
-                avg_loss = self._run_validation(data_module.valid, None, epoch)
-                self.valid_epoch_records[epoch] = {'avg_loss': avg_loss.detach().cpu()}
+            self.logger.flush()
+
+            if data_module.valid is not None:
+                if self.val_check_epochs is not None and epoch % self.val_check_epochs == 0:
+                    avg_loss = self._run_validation(data_module.valid, None, epoch)
+                    self.valid_epoch_records[epoch] = {'avg_loss': avg_loss}
 
             if self.state_save_epochs is not None and epoch % self.state_save_epochs == 0:
                 state_path = self.boat.save_state(self.run_folder, 'boat_state', global_step=self.global_step, epoch=epoch+1)
@@ -112,13 +112,6 @@ class Trainer:
                 if epoch not in self.valid_epoch_records:
                     self.valid_epoch_records[epoch] = {}
                 self.valid_epoch_records[epoch]['state_path'] = state_path
-
-            for cb in self.callbacks:
-                cb.on_epoch_end(self, self.boat, epoch)
-
-        # on train end
-        for cb in self.callbacks:
-            cb.on_train_end(self, self.boat)
 
     def _run_validation(self, val_dataloader, global_step=None, epoch=None):
         for cb in self.callbacks:

@@ -2,15 +2,26 @@ import torch
 from rhino.diffusers.boats.unconditioned.latent_diffusing import UnconditionedLatentDiffusionBoat
 from trainer.utils.build_components import build_module
 
+from trainer.debuggers.memory_leaks import *
+
 class ConditionedLatentDiffusionBoat(UnconditionedLatentDiffusionBoat):
     
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
+    def __init__(self, boat_config=None, optimization_config=None, validation_config=None, memory_debug=False):
         super().__init__(boat_config, optimization_config, validation_config)
         
         # Condition mapper processes conditioning inputs (text, class labels, etc.)
         self.models['context_encoder'] = build_module(boat_config['context_encoder'])
 
         self.use_reference = validation_config['use_reference']
+
+        if memory_debug:
+            original_training_step = self.training_step
+            original_step = self._step
+            original_log_metric = self._log_metric
+
+            self.training_step = track_object_increases(original_training_step)
+            self._step = track_object_increases(original_step)
+            self._log_metric = track_object_increases(original_log_metric)
 
     def forward(self, z0, c):
         
@@ -37,7 +48,7 @@ class ConditionedLatentDiffusionBoat(UnconditionedLatentDiffusionBoat):
             z1 = self.encode_images(x1)
 
         encoder_hidden_states = self.models['context_encoder'](c)
-        
+
         # Initialize random noise in latent space
         z0 = torch.randn_like(z1)
 
@@ -57,11 +68,11 @@ class ConditionedLatentDiffusionBoat(UnconditionedLatentDiffusionBoat):
 
         # Log metrics
         self._log_metric(loss, metric_name='noise_mse', prefix='train')
-        
+
         # Update EMA
         if self.use_ema and self.get_global_step() >= self.ema_start:
             self._update_ema()
-        
+
         return loss
         
     def validation_step(self, batch, batch_idx):
@@ -106,7 +117,7 @@ class ConditionedLatentDiffusionBoat(UnconditionedLatentDiffusionBoat):
             named_imgs = {'groundtruth': x1, 'generated': hx1,}
 
             if self.use_reference:
-                named_imgs['reference'] = encoder_hidden_states
+                named_imgs['reference'] = c
 
             self._visualize_validation(named_imgs, batch_idx)
 

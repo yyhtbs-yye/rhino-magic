@@ -20,6 +20,7 @@ _vars:
   condition_channels: 3
   out_channels: 3
   sample_size: [128, 128]
+  batch_size: 32
 
   train_folder_paths:
     gt: data/ffhq/ffhq_imgs/ffhq_128

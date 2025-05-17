@@ -10,6 +10,8 @@ class AutoencoderKLWrapper(nn.Module):
         self.autoencoder = autoencoder
         self.config = self.autoencoder.config
 
+        self.eval()
+
     def encode(self, x):
         return self.autoencoder.encode(x).latent_dist.mean
 
