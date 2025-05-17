@@ -64,10 +64,11 @@ class UnconditionedLatentDiffusionBoat(BaseDiffusionBoat):
         
     def validation_step(self, batch, batch_idx):
         
-        x1 = batch['gt']
-        batch_size = x1.size(0)
-        
         with torch.no_grad():
+
+            x1 = batch['gt']
+            batch_size = x1.size(0)
+
             z1 = self.encode_images(x1)
 
             timesteps = self.models['scheduler'].sample_timesteps(batch_size, self.device)

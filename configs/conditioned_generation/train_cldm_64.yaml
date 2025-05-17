@@ -134,24 +134,3 @@ logging:
   root_dir: work_dirs/cldm
   experiment_name: cldm_64
   log_every_n_steps: 50
-
-# Checkpoint configuration
-checkpoint:
-  save_best_metric: 'train/noise_mse'  # Changed from latent_mse to img_mse
-  save_best_mode: 'min'            # 'min' for loss metrics
-  save_top_k: 3                    # Number of best checkpoints to keep
-  save_last: true                  # Whether to save the last checkpoint
-
-# Visualization configuration, not implemented yet (now manually)
-# visualization:
-#   vis_backends:
-#     - type: LocalVisBackend
-#   visualizer:
-#     type: ConcatImageVisualizer
-#     vis_backends: ${visualization.vis_backends}
-#     fn_key: gt_path
-#     img_keys: [gt_img, pred_img]
-#     bgr2rgb: true
-#   custom_hooks:
-#     - type: BasicVisualizationHook
-#       interval: 1

@@ -59,6 +59,8 @@ class Trainer:
 
         for epoch in range(self.start_epoch, self.max_epochs):
 
+            self.epoch = epoch
+
             for cb in self.callbacks:
                 cb.on_epoch_start(self, self.boat, epoch)
 
@@ -99,6 +101,8 @@ class Trainer:
                     self.valid_step_records[self.global_step]['state_path'] = state_path
 
                 self.logger.flush()
+
+            self.boat.training_epoch_end(epoch)
             
             print(f"epoch {epoch} has been ended, postfix = {get_ram_info()}")
 

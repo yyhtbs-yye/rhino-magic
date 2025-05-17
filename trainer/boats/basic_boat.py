@@ -118,6 +118,9 @@ class BaseBoat(ABC):
         """
         pass
 
+    def training_epoch_end(self, epoch):
+        pass
+    
     def save_state(self, run_folder, prefix="boat_state", global_step=None, epoch=None):
         return save_state(run_folder, prefix, boat=self, global_step=global_step, epoch=epoch)
 
@@ -180,3 +183,4 @@ class BaseBoat(ABC):
         else:
             # Fallback to standard PyTorch backward
             loss.backward()
+            

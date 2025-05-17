@@ -27,7 +27,11 @@ class UnconditionedPixelDiffusionBoat(BaseDiffusionBoat):
         xt = self.models['scheduler'].perturb(x1, x0, timesteps)
 
         targets = self.models['scheduler'].get_targets(x1, x0, timesteps)
-        predictions = self.models['model'](xt, timesteps)['sample']
+        predictions = self.models['model'](xt, timesteps)
+        
+        if hasattr(predictions, 'sample'):
+            predictions = predictions.sample
+
         weights = self.models['scheduler'].get_loss_weights(timesteps)
 
         loss = self.losses['model'](predictions, targets, weights=weights)
@@ -45,10 +49,13 @@ class UnconditionedPixelDiffusionBoat(BaseDiffusionBoat):
     
     def validation_step(self, batch, batch_idx):
 
-        x1 = batch['gt']
-        batch_size = x1.size(0)
         
         with torch.no_grad():
+
+            x1 = batch['gt']
+
+            batch_size = x1.size(0)
+
             timesteps = self.models['scheduler'].sample_timesteps(batch_size, self.device)
 
             x0 = torch.randn_like(x1)
@@ -58,7 +65,10 @@ class UnconditionedPixelDiffusionBoat(BaseDiffusionBoat):
             network_in_use = self.models['model_ema'] if self.use_ema and 'model_ema' in self.models else self.models['model']
 
             targets = self.models['scheduler'].get_targets(x1, x0, timesteps)
-            predictions = network_in_use(xt, timesteps)['sample']
+            predictions = network_in_use(xt, timesteps)
+
+            if hasattr(predictions, 'sample'):
+                predictions = predictions.sample
 
             weights = self.models['scheduler'].get_loss_weights(timesteps)
 
@@ -66,11 +76,11 @@ class UnconditionedPixelDiffusionBoat(BaseDiffusionBoat):
 
             self._log_metric(loss, metric_name='noise_mse', prefix='valid')
 
-            hx1 = self.forward(x0)
-
             results = self._calc_reference_quality_metrics(predictions, targets)
 
             self._log_metrics(results, prefix='valid')
+
+            hx1 = self.forward(x0)
 
             named_imgs = {'groundtruth': x1, 'generated': hx1,}
 
