@@ -1,176 +1,163 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from diffusers import ModelMixin, ConfigMixin
+from diffusers.configuration_utils import register_to_config
+from rhino.adversarials.components.pggan import PixelNorm, ToRGB2D, FromRGB2D, Upsample2D, Downsample2D, DiscriminatorFinalBlock2D
 
-from rhino.adversarials.components.pggan import PixelNorm, MinibatchStdDev
+class ProgressiveGrowGenerator(ModelMixin, ConfigMixin):
+    @register_to_config
+    def __init__(
+        self,
+        in_channels: int = 512,
+        out_channels: int = 1,
+        sample_size: int = 28,
+        block_types: tuple = ("Upsample2D", "Upsample2D"),
+        block_out_channels: tuple = (128, 64, 32),
+        layers_per_block: int = 1,
+        current_stage: int = 0,
+        alpha: float = 1.0
+    ):
+        super().__init__()
 
-class PGGenerator(nn.Module):
-    def __init__(self, latent_dim=512, output_channels=1):
-        super(PGGenerator, self).__init__()
-        self.latent_dim = latent_dim
-        self.output_channels = output_channels
-        self.current_stage = 0
-        self.alpha = 1.0  # Start with fully stabilized network
-        
-        # Initial block (7x7)
-        self.initial = nn.Sequential(
+        # Initial block: Expand latent to 7x7
+        self.initial_block = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, block_out_channels[0], 7, 1, 0),
             PixelNorm(),
-            nn.ConvTranspose2d(latent_dim, 128, 7, 1, 0),  # 7x7 output
-            nn.LeakyReLU(0.2),
-            PixelNorm(),
-            nn.Conv2d(128, 128, 3, 1, 1),  # 7x7 maintained
-            nn.LeakyReLU(0.2),
-            PixelNorm()
+            nn.LeakyReLU(0.2)
         )
-        
-        # ToRGB blocks for each resolution
-        self.to_rgb_blocks = nn.ModuleList([
-            nn.Conv2d(128, output_channels, 1, 1, 0),  # 7x7 -> RGB
-            nn.Conv2d(64, output_channels, 1, 1, 0),   # 14x14 -> RGB
-            nn.Conv2d(32, output_channels, 1, 1, 0)    # 28x28 -> RGB
-        ])
-        
+
         # Upsampling blocks
-        self.up_blocks = nn.ModuleList([
-            # 7x7 -> 14x14
-            nn.Sequential(
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.Conv2d(128, 64, 3, 1, 1),  # 14x14
-                nn.LeakyReLU(0.2),
-                PixelNorm(),
-                nn.Conv2d(64, 64, 3, 1, 1),   # 14x14
-                nn.LeakyReLU(0.2),
-                PixelNorm()
-            ),
-            # 14x14 -> 28x28
-            nn.Sequential(
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.Conv2d(64, 32, 3, 1, 1),   # 28x28
-                nn.LeakyReLU(0.2),
-                PixelNorm(),
-                nn.Conv2d(32, 32, 3, 1, 1),   # 28x28
-                nn.LeakyReLU(0.2),
-                PixelNorm()
-            )
-        ])
-    
-    def forward(self, z):
-        # Reshape latent vector to 2D
-        x = z.view(z.size(0), self.latent_dim, 1, 1)
-        
-        # Initial block
-        x = self.initial(x)
-        
-        # Return image based on current stage and alpha
-        if self.current_stage == 0:
-            # Stage 0: 7x7 resolution
-            return self.to_rgb_blocks[0](x)
-        else:
-            # Process through upsampling blocks up to current stage
-            for i in range(self.current_stage):
-                features_prev = x
-                x = self.up_blocks[i](x)
-                
-                # During transition phase for the current stage
-                if i == self.current_stage - 1 and self.alpha < 1:
-                    # Blend with upsampled lower resolution
-                    y = F.interpolate(features_prev, scale_factor=2, mode='nearest')
-                    y = self.to_rgb_blocks[i](y)
-                    out = self.to_rgb_blocks[i+1](x)
-                    return (1 - self.alpha) * y + self.alpha * out
-            
-            # After transition: use higher resolution directly
-            return self.to_rgb_blocks[self.current_stage](x)
-        
-    def progress(self):
-        """Progress to the next stage if not at final stage"""
-        if self.current_stage < len(self.up_blocks):
-            self.current_stage += 1
-            self.alpha = 0.0  # Start transitioning from the previous stage
-            
-    def update_alpha(self, increment=0.1):
-        """Update the alpha value for smooth transition"""
-        self.alpha = min(1.0, self.alpha + increment)
+        self.up_blocks = nn.ModuleList([])
+        for i, (block_type, in_ch) in enumerate(zip(block_types, block_out_channels[:-1])):
+            out_ch = block_out_channels[i + 1]
+            self.up_blocks.append(Upsample2D(in_ch, out_ch))
 
-# Progressive Discriminator
-class PGDiscriminator(nn.Module):
-    def __init__(self, input_channels=1):
-        super(PGDiscriminator, self).__init__()
-        self.input_channels = input_channels
-        self.current_stage = 0
-        self.alpha = 1.0  # Start with fully stabilized network
-        
-        # FromRGB blocks for each resolution
-        self.from_rgb_blocks = nn.ModuleList([
-            nn.Conv2d(input_channels, 128, 1, 1, 0),  # RGB -> 7x7 features
-            nn.Conv2d(input_channels, 64, 1, 1, 0),   # RGB -> 14x14 features
-            nn.Conv2d(input_channels, 32, 1, 1, 0)    # RGB -> 28x28 features
-        ])
-        
-        # Downsampling blocks
-        self.down_blocks = nn.ModuleList([
-            # 14x14 -> 7x7
-            nn.Sequential(
-                nn.Conv2d(64, 64, 3, 1, 1),   # 14x14
-                nn.LeakyReLU(0.2),
-                nn.Conv2d(64, 128, 3, 1, 1),  # 14x14
-                nn.LeakyReLU(0.2),
-                nn.AvgPool2d(2)  # 7x7
-            ),
-            # 28x28 -> 14x14
-            nn.Sequential(
-                nn.Conv2d(32, 32, 3, 1, 1),   # 28x28
-                nn.LeakyReLU(0.2),
-                nn.Conv2d(32, 64, 3, 1, 1),   # 28x28
-                nn.LeakyReLU(0.2),
-                nn.AvgPool2d(2)  # 14x14
-            ),
-        ])
-        
-        # Final block (7x7 -> decision)
-        self.final = nn.Sequential(
-            MinibatchStdDev(),
-            nn.Conv2d(128 + 1, 128, 3, 1, 1),  # +1 for minibatch std
-            nn.LeakyReLU(0.2),
-            nn.Flatten(),
-            nn.Linear(128 * 7 * 7, 128),
-            nn.LeakyReLU(0.2),
-            nn.Linear(128, 1),
-            nn.Sigmoid()
-        )
-    
-    def forward(self, x):
-        # Process based on current stage
-        if self.current_stage == 0:
-            # Stage 0: 7x7 resolution
-            features = self.from_rgb_blocks[0](x)
-            return self.final(features)
-        else:
-            # Start from the highest resolution
-            current_res_idx = self.current_stage
-            features = self.from_rgb_blocks[current_res_idx](x)
-            
-            # Process through downsampling blocks from highest to lowest
-            for i in range(current_res_idx-1, -1, -1):
-                if i == current_res_idx-1 and self.alpha < 1:
-                    # During transition: blend with downsampled input
-                    x_down = F.avg_pool2d(x, 2)
-                    y = self.from_rgb_blocks[current_res_idx-1](x_down)
-                    features = self.down_blocks[current_res_idx-1](features)
-                    features = (1 - self.alpha) * y + self.alpha * features
-                else:
-                    # After transition: downsample features directly
-                    features = self.down_blocks[i](features)
-            
-            # Final decision
-            return self.final(features)
-    
+        # ToRGB blocks for each stage
+        self.to_rgb = nn.ModuleList([])
+        for ch in block_out_channels:
+            self.to_rgb.append(ToRGB2D(ch, out_channels))
+
+    def forward(self, z, return_dict: bool = True):
+        x = z.view(z.size(0), self.config.in_channels, 1, 1)
+        x = self.initial_block(x)
+
+        if self.config.current_stage == 0:
+            out = self.to_rgb[0](x)
+            return {"sample": out} if return_dict else out
+
+        for i in range(self.config.current_stage):
+            prev = x
+            x = self.up_blocks[i](x)
+            if i == self.config.current_stage - 1 and self.config.alpha < 1.0:
+                y = F.interpolate(prev, scale_factor=2, mode='nearest')
+                y = self.to_rgb[i](y)
+                out = self.to_rgb[i + 1](x)
+                out = (1 - self.config.alpha) * y + self.config.alpha * out
+                return {"sample": out} if return_dict else out
+
+        out = self.to_rgb[self.config.current_stage](x)
+        return {"sample": out} if return_dict else out
+
     def progress(self):
-        """Progress to the next stage if not at final stage"""
-        if self.current_stage < len(self.down_blocks):
-            self.current_stage += 1
-            self.alpha = 0.0  # Start transitioning
-            
-    def update_alpha(self, increment=0.1):
-        """Update the alpha value for smooth transition"""
-        self.alpha = min(1.0, self.alpha + increment)
+        if self.config.current_stage < len(self.up_blocks):
+            self.config.current_stage += 1
+            self.config.alpha = 0.0
+
+    def update_alpha(self, increment: float = 0.1):
+        self.config.alpha = min(1.0, self.config.alpha + increment)
+
+class ProgressiveGrowDiscriminator(ModelMixin, ConfigMixin):
+    @register_to_config
+    def __init__(
+        self,
+        in_channels: int = 1,
+        out_channels: int = 1,
+        sample_size: int = 28,
+        block_types: tuple = ("DownBlock2D", "DownBlock2D"),
+        block_out_channels: tuple = (32, 64, 128),
+        layers_per_block: int = 1,
+        current_stage: int = 0,
+        alpha: float = 1.0
+    ):
+        super().__init__()
+
+        # FromRGB blocks
+        self.from_rgb = nn.ModuleList([])
+        for ch in block_out_channels:
+            self.from_rgb.append(FromRGB2D(in_channels, ch))
+
+        # Downsampling blocks
+        self.down_blocks = nn.ModuleList([])
+        for i, (block_type, in_ch) in enumerate(zip(block_types, block_out_channels[1:])):
+            out_ch = block_out_channels[i]
+            self.down_blocks.append(Downsample2D(out_ch, in_ch))
+
+        # Final block
+        self.final_block = DiscriminatorFinalBlock2D(block_out_channels[-1])
+
+    def forward(self, x, return_dict: bool = True):
+        if self.config.current_stage == 0:
+            feat = self.from_rgb[0](x)
+            out = self.final_block(feat)
+            return {"sample": out} if return_dict else out
+
+        idx = self.config.current_stage
+        feat = self.from_rgb[idx](x)
+        for i in range(idx - 1, -1, -1):
+            if i == idx - 1 and self.config.alpha < 1.0:
+                down = F.avg_pool2d(x, 2)
+                y = self.from_rgb[i](down)
+                feat = self.down_blocks[i](feat)
+                feat = (1 - self.config.alpha) * y + self.config.alpha * feat
+            else:
+                feat = self.down_blocks[i](feat)
+
+        out = self.final_block(feat)
+        return {"sample": out} if return_dict else out
+
+    def progress(self):
+        if self.config.current_stage < len(self.down_blocks):
+            self.config.current_stage += 1
+            self.config.alpha = 0.0
+
+    def update_alpha(self, increment: float = 0.1):
+        self.config.alpha = min(1.0, self.config.alpha + increment)
+
+if __name__ == "__main__":
+    # Example usage
+    generator_config = {
+        "sample_size": 28,
+        "in_channels": 512,
+        "out_channels": 1,
+        "block_types": ["UpBlock2D", "UpBlock2D"],
+        "block_out_channels": [128, 64, 32],
+        "layers_per_block": 1,
+        "current_stage": 0,
+        "alpha": 1.0
+    }
+
+    discriminator_config = {
+        "sample_size": 28,
+        "in_channels": 1,
+        "out_channels": 1,
+        "block_types": ["DownBlock2D", "DownBlock2D"],
+        "block_types": [],
+        "block_out_channels": [32, 64, 128],
+        "layers_per_block": 1,
+        "current_stage": 0,
+        "alpha": 1.0
+    }
+
+    # Initialize models
+    generator = ProgressiveGrowGenerator.from_config(**generator_config)
+    discriminator = ProgressiveGrowDiscriminator.from_config(**discriminator_config)
+
+    # Test forward pass
+    z = torch.randn(1, 512)
+    gen_output = generator(z)
+    print("Generator output shape:", gen_output["sample"].shape)
+
+    x = torch.randn(1, 1, 28, 28)
+    disc_output = discriminator(x)
+    print("Discriminator output shape:", disc_output["sample"].shape)
