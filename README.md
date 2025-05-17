@@ -1,6 +1,6 @@
 # 🦏 rhino-magic
 
-**rhino-magic** is a modular and extensible machine learning framework designed for rapid experimentation and deployment. It provides a structured approach to training and evaluating models, leveraging configuration files and utility scripts to streamline workflows.
+**rhino-magic** is a modular and extensible image generation and restoration framework designed for rapid experimentation. It provides a structured approach to training and evaluating models, leveraging configuration files and utility scripts to streamline workflows.
 
 ---
 
@@ -11,14 +11,12 @@ rhino-magic/
 ├── configs/              # Configuration files for experiments
 ├── evaluate_scripts/     # Scripts for model evaluation
 ├── jupyter_notebooks/    # Notebooks for data exploration and prototyping
+├── readmes/              # Readme Markdown files
 ├── rhino/                # Core library modules
-├── rhino_magic.egg-info/ # Package metadata
 ├── train_scripts/        # Scripts for training models
 ├── trainer/              # Training logic and utilities
 ├── utils/                # Helper functions and utilities
 ├── work_dirs/            # Output directories for experiments (it is empty)
-├── .gitignore            # Git ignore rules
-├── memory_debug.log      # Memory usage logs
 ├── pyproject.toml        # Build system configuration
 ├── requirements.txt      # Python dependencies
 └── setup.py              # Package installation script
@@ -128,18 +126,6 @@ pip install .
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a new branch: `git checkout -b feature/your-feature-name`
-3. Commit your changes: `git commit -m 'Add your feature'`
-4. Push to the branch: `git push origin feature/your-feature-name`
-5. Open a pull request
-
----
-
 ## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
@@ -151,5 +137,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 For questions or suggestions, please open an issue or contact the repository owner directly.
 
 ---
-
-Feel free to customize this `README.md` to better fit the specific details and requirements of your project.
