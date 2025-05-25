@@ -134,6 +134,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## 📬 Contact
 
-For questions or suggestions, please open an issue or contact the repository owner directly.
+For questions or suggestions, please open an issue or contact the repository owner (yyhtbs0@gmail.com) directly.
 
 ---
