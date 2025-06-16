@@ -22,11 +22,11 @@ _vars:
 
   train_folder_paths:
     gt: data/ffhq/ffhq_imgs/ffhq_256
-    ctx: data/ffhq/ffhq_imgs/ffhq_32
+    lq: data/ffhq/ffhq_imgs/ffhq_32
     
   valid_folder_paths:
     gt: data/celeba/subsets/celeba_256
-    ctx: data/celeba/subsets/celeba_32
+    lq: data/celeba/subsets/celeba_32
 
   experiment_name: sr3_unet_ddim_ffhq_32_256
 

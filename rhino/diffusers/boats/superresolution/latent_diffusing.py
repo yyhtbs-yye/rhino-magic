@@ -40,7 +40,7 @@ class ConditionedLatentDiffusionBoat(UnconditionedLatentDiffusionBoat):
     def training_step(self, batch, batch_idx):
 
         x1 = batch['gt']
-        c = batch['ctx'] 
+        c = batch['lq'] 
 
         batch_size = x1.size(0)
         
@@ -78,7 +78,7 @@ class ConditionedLatentDiffusionBoat(UnconditionedLatentDiffusionBoat):
     def validation_step(self, batch, batch_idx):
 
         x1 = batch['gt']
-        c = batch['ctx']
+        c = batch['lq']
 
         batch_size = x1.size(0)
 

@@ -1,5 +1,5 @@
 boat: 
-  path: 'rhino.diffusers.boats.conditioned.pixel_diffusing'
+  path: 'rhino.diffusers.boats.superresolution.pixel_diffusing'
   name: 'ConditionedPixelDiffusionBoat'
 
   model:
@@ -101,12 +101,12 @@ data:
           folder_paths: $train_folder_paths
           data_prefix:
             gt: ''
-            ctx: ''
+            lq: ''
           pipeline:
             - type: LoadImageFromFile
-              keys: [gt, ctx]
+              keys: [gt, lq]
             - type: Normalize
-              keys: [gt, ctx]
+              keys: [gt, lq]
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
       batch_size: $batch_size
@@ -125,12 +125,12 @@ data:
           folder_paths: $valid_folder_paths
           data_prefix:
             gt: ''
-            ctx: ''
+            lq: ''
           pipeline:
             - type: LoadImageFromFile
-              keys: [gt, ctx]
+              keys: [gt, lq]
             - type: Normalize
-              keys: [gt, ctx]
+              keys: [gt, lq]
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
       batch_size: $batch_size

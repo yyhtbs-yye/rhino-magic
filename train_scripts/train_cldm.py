@@ -3,7 +3,7 @@ import torch
 import yaml
 
 from trainer.data_modules.image_data_module import SimpleTrainValidDataModule
-from rhino.diffusers.boats.conditioned.latent_diffusing import ConditionedLatentDiffusionBoat
+from rhino.diffusers.boats.superresolution.latent_diffusing import ConditionedLatentDiffusionBoat
 
 torch.set_float32_matmul_precision('high')
 
