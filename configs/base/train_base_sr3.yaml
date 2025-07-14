@@ -1,28 +1,29 @@
 boat: 
-  path: 'rhino.diffusers.boats.superresolution.pixel_diffusing'
-  name: 'ConditionedPixelDiffusionBoat'
+  path: 'rhino.boats.base_diffusion_boat'
+  name: 'BaseDiffusionBoat'            
 
-  model:
-    path: 'rhino.diffusers.networks.unet_2d_flexible_condition'
-    name: 'UNet2DFlexibleConditionModel'
+  net:
+    path: 'rhino.nn_wrappers.dit_2d_flexible_wrapper'
+    name: 'DiT2DFlexibleWrapper'
     config:
       mode: 'concat'
-      sample_channels: $sample_channels
-      condition_channels: $condition_channels
       sample_size: $sample_size
+      sample_channels: $sample_channels
+      patch_size: 2
+      num_layers: 8
+      condition_channels: $condition_channels
       out_channels: $out_channels
-      down_block_types: ['DownBlock2D', 'DownBlock2D', 'DownBlock2D', 'AttnDownBlock2D']
-      up_block_types: ['AttnUpBlock2D', 'UpBlock2D', 'UpBlock2D', 'UpBlock2D']
-      block_out_channels: [64, 128, 256, 256]
-      layers_per_block: 1
-      attention_head_dim: 8
+      num_embeds_ada_norm: 1
+      attention_head_dim: 64
+      num_attention_heads: 8
+      # norm_type: group
       norm_num_groups: 32
       norm_eps: 0.00001
 
   context_encoder: {}
 
   scheduler:
-    path: 'rhino.diffusers.schedulers.scheduling_ddim'
+    path: 'rhino.diffusion_helpers.schedulers.scheduling_ddim'
     name: 'DDIMScheduler'
     config:
       beta_start: 0.0001
@@ -35,8 +36,8 @@ boat:
       num_train_timesteps: 1000
 
   solver:
-    path: 'rhino.diffusers.solvers.sampling_conditioned_ddim'
-    name: 'DDIMConditionedSampler'
+    path: 'rhino.diffusion_helpers.solvers.sampling_ddim'
+    name: 'DDIMSampler'
     config:
       beta_start: 0.0001
       beta_end: 0.02
@@ -49,13 +50,13 @@ boat:
       eta: 0.0
       num_inference_steps: 50
   loss:
-    model:
-      path: 'trainer.losses.weighted_losses'
-      name: 'WeightedMSELoss'
+    net:
+      path: 'rhino.loss_wrappers.pixel_loss'
+      name: 'PixelLoss'
       params: {}
 
 optimization: 
-  model:
+  net:
     path: 'torch.optim'
     name: 'Adam'
     params:
@@ -88,6 +89,7 @@ validation:
       path: 'torchmetrics.image'
       name: 'StructuralSimilarityIndexMeasure'
       params: {}
+  target_metric_name: 'psnr'
 
 data: 
   path: trainer.data_modules.image_data_module
@@ -101,16 +103,16 @@ data:
           folder_paths: $train_folder_paths
           data_prefix:
             gt: ''
-            lq: ''
+            cond: ''
           pipeline:
             - type: LoadImageFromFile
-              keys: [gt, lq]
+              keys: [gt, cond]
             - type: Normalize
-              keys: [gt, lq]
+              keys: [gt, cond]
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
-      batch_size: $batch_size
-      num_workers: $batch_size
+      batch_size: $train_batch_size
+      num_workers: $train_batch_size
       pin_memory: false
       persistent_workers: false
       sampler:
@@ -125,16 +127,16 @@ data:
           folder_paths: $valid_folder_paths
           data_prefix:
             gt: ''
-            lq: ''
+            cond: ''
           pipeline:
             - type: LoadImageFromFile
-              keys: [gt, lq]
+              keys: [gt, cond]
             - type: Normalize
-              keys: [gt, lq]
+              keys: [gt, cond]
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
-      batch_size: $batch_size
-      num_workers: $batch_size
+      batch_size: $valid_batch_size
+      num_workers: $valid_batch_size
       persistent_workers: true
       sampler:
         type: DefaultSampler

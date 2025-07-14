@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 """
-extract_dinov2_patch_feats_multithread.py
+extract_dinov2_base_patch_feats_multithread.py
 
 Run example
 -----------
-python extract_dinov2_patch_feats_multithread.py \
+python extract_dinov2_base_patch_feats_multithread.py \
     --input_dir  /path/to/ffhq256 \
     --output_dir /path/to/ffhq256_feats \
     --gpu_ids    0,1,2,3 \
     --batch_size_per_gpu 8
 """
-import argparse, pickle, pathlib, sys, math
+import argparse
+import pickle
+import pathlib
+import sys
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
@@ -21,9 +25,6 @@ from torchvision.transforms import InterpolationMode
 from PIL import Image
 from tqdm import tqdm
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Utilities
-# ──────────────────────────────────────────────────────────────────────────────
 def read_image(path: pathlib.Path):
     return Image.open(path).convert("RGB")
 
@@ -33,18 +34,18 @@ def save_pickle(obj, path: pathlib.Path):
     with open(path, "wb") as f:
         pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Model & transform helpers
-# ──────────────────────────────────────────────────────────────────────────────
 def load_backbone(
-    name: str = "vit_giant_patch14_dinov2.lvd142m", device: torch.device = "cpu"
+    name: str = "vit_base_patch14_dinov2.lvd142m",
+    device: torch.device = torch.device("cpu"),
 ):
+    """
+    Load the DINOv2 base Vision Transformer from timm (no classifier head).
+    """
     model = timm.create_model(
         name,
         pretrained=True,
-        num_classes=0,        # drop classifier
-        features_only=False,  # keep tokens
+        num_classes=0,        # drop any classifier head
+        features_only=False,  # keep all tokens (CLS + patches)
     ).to(device)
     model.eval()
     return model
@@ -52,29 +53,24 @@ def load_backbone(
 
 def build_transform(model):
     cfg = resolve_model_data_config(model)
-    return transforms.Compose(
-        [
-            transforms.Pad((0, 0, 40, 40), fill=0),   # 256→296
-            transforms.Resize(cfg["input_size"][1], interpolation=InterpolationMode.BICUBIC),
-            transforms.CenterCrop(cfg["input_size"][1]),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=cfg["mean"], std=cfg["std"]),
-        ]
-    )
+    return transforms.Compose([
+        transforms.Pad((0, 0, 40, 40), fill=0),   # 256→296
+        transforms.Resize(cfg["input_size"][1], interpolation=InterpolationMode.BICUBIC),
+        transforms.CenterCrop(cfg["input_size"][1]),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=cfg["mean"], std=cfg["std"]),
+    ])
 
 
 @torch.no_grad()
 def extract_patch_tokens(model, x):
     """
-    Return only spatial tokens: (B, 1369, D) for ViT-G/14.
+    Run forward_features and drop the CLS token.
+    Returns: (B, num_patches, D)
     """
-    feats = model.forward_features(x)   # dict with CLS+patch tokens
-    return feats[:, 1:, :]              # drop CLS
+    feats = model.forward_features(x)   # tensor shape (B, 1+N, D)
+    return feats[:, 1:, :]              # drop CLS → (B, N, D)
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Worker function executed in **one thread per GPU**
-# ──────────────────────────────────────────────────────────────────────────────
 def process_on_gpu(
     device_id: int,
     img_paths: List[pathlib.Path],
@@ -82,35 +78,36 @@ def process_on_gpu(
     batch_size: int,
 ):
     device = torch.device(f"cuda:{device_id}")
-    model  = load_backbone(device=device)
+    model = load_backbone(device=device)
     transform = build_transform(model)
 
-    n_saved = 0
     pbar = tqdm(
         total=len(img_paths),
         desc=f"GPU{device_id}",
         position=device_id,
         leave=False,
     )
+    n_saved = 0
 
     for i in range(0, len(img_paths), batch_size):
         batch_paths = img_paths[i : i + batch_size]
         imgs = [transform(read_image(p)) for p in batch_paths]
-        imgs = torch.stack(imgs, dim=0).to(device, non_blocking=True)  # (B, 3, H, W)
+        x = torch.stack(imgs, dim=0).to(device, non_blocking=True)  # (B,3,H,W)
 
-        patch = extract_patch_tokens(model, imgs).cpu()                # (B, 1369, D)
+        # extract float32 patch tokens, move to CPU and convert to FP16
+        patch = extract_patch_tokens(model, x).cpu().to(torch.float16)  # (B, N, D) in FP16
 
-        # Crop 37×37 → 32×32
+        # Crop N=37×37 → 32×32 = 1024 tokens
         B, N, D = patch.shape
-        gs = int(math.sqrt(N))                                         # 37
+        gs = int(math.sqrt(N))  # should be 37 for DINOv2 ViT-base/14
         patch = (
-            patch.view(B, gs, gs, D)[:, :32, :32, :]                   # keep 32×32
-                 .reshape(B, -1, D)                                    # (B, 1024, D)
+            patch.view(B, gs, gs, D)[:, :32, :32, :]   # keep top-left 32×32
+                 .reshape(B, -1, D)                    # (B, 32*32, D) = (B,1024,D)
         )
 
-        # Save per-image
-        for j, path in enumerate(batch_paths):
-            out_path = out_dir / path.with_suffix(".pkl").name
+        # save each image separately (still half-precision)
+        for j, img_path in enumerate(batch_paths):
+            out_path = out_dir / img_path.with_suffix(".pkl").name
             save_pickle({"patch_tokens": patch[j : j + 1]}, out_path)
             n_saved += 1
 
@@ -119,10 +116,6 @@ def process_on_gpu(
     pbar.close()
     return n_saved
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Main
-# ──────────────────────────────────────────────────────────────────────────────
 def main(args):
     torch.backends.cudnn.benchmark = True
 
@@ -130,20 +123,18 @@ def main(args):
     out_dir = pathlib.Path(args.output_dir).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Collect images
+    # gather image paths
     img_exts  = {".png", ".jpg", ".jpeg", ".webp"}
     img_paths = sorted([p for p in in_dir.glob("*") if p.suffix.lower() in img_exts])
     if not img_paths:
         sys.exit(f"No images with extensions {img_exts} found in {in_dir}")
 
-    device_ids = [int(d) for d in args.gpu_ids.split(",") if d.strip() != ""]
+    device_ids = [int(d) for d in args.gpu_ids.split(",") if d.strip()]
     if not device_ids:
         sys.exit("No GPU IDs provided")
 
-    # Split the image list evenly across GPUs
-    chunks = [
-        img_paths[i::len(device_ids)] for i in range(len(device_ids))
-    ]
+    # split work evenly
+    chunks = [img_paths[i::len(device_ids)] for i in range(len(device_ids))]
 
     total_expected = len(img_paths)
     total_saved = 0
@@ -163,19 +154,18 @@ def main(args):
         for f in tqdm(as_completed(futures), total=len(futures), desc="GPUs finished"):
             total_saved += f.result()
 
-    print(f"Done. Saved {total_saved}/{total_expected} pickle files to {out_dir}")
+    print(f"Done. Saved {total_saved}/{total_expected} feature files to {out_dir}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir",  type=str, default="data/ffhq/ffhq_imgs/ffhq_256",
-                        help="Directory with input images (e.g., FFHQ-256 PNGs)")
-    parser.add_argument("--output_dir", type=str, default="data/ffhq/ffhq_dinov2/ffhq_256",
+                        help="Directory with input images")
+    parser.add_argument("--output_dir", type=str, default="data/ffhq/ffhq_dinov2_base/ffhq_256",
                         help="Where to write <image-name>.pkl files")
-    parser.add_argument("--gpu_ids",    type=str, default="0,1,2,3",
-                        help="Comma-separated GPU IDs to use (e.g. '0,1,2,3')")
+    parser.add_argument("--gpu_ids",    type=str, default="0,9,10,11",
+                        help="Comma-separated GPU IDs to use")
     parser.add_argument("--batch_size_per_gpu", type=int, default=8,
-                        help="Mini-batch size handled by **each** GPU thread")
+                        help="Mini-batch size handled by each GPU thread")
     args = parser.parse_args()
     main(args)
-

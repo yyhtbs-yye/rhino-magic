@@ -133,5 +133,5 @@ if __name__=="__main__":
     for batch in dataloader:
         print("Batch keys:", batch.keys())
         print("GT shape:", batch['gt'].shape)
-        print("LQ shape:", batch['lq'].shape)
+        print("LQ shape:", batch['cond'].shape)
         break  # Only process one batch for testing

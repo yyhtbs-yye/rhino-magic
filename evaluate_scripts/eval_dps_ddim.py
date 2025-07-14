@@ -15,7 +15,7 @@ with open(config_path, 'r') as f:
     config = yaml.safe_load(f)
 
 # Extract configurations
-model_config = config['model']
+model_config = config['net']
 validation_config = config['validation']
 logging_config = config['logging']
 data_config = config['data']
