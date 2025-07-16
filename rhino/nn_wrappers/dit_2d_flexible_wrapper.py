@@ -70,6 +70,12 @@ class DiTConcatConditionModel(DiTTransformer2DModel):
                 device=sample.device,
             )
 
+        if isinstance(timestep, int):
+            timestep = torch.tensor([timestep] * sample.shape[0], 
+                                    device=sample.device)
+        elif isinstance(timestep, torch.Tensor) and timestep.ndim == 0:
+            timestep = timestep.repeat(sample.shape[0]).to(sample.device)
+
         return super().forward(
             sample,
             timestep,

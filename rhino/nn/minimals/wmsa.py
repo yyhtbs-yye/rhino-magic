@@ -2,17 +2,17 @@ import torch
 import torch.nn as nn
 
 class WindowMultiheadSelfAttention(nn.Module):
-    def __init__(self, dim, num_heads, qkv_bias=True, qk_scale=None):
+    def __init__(self, embed_dim, num_heads, qkv_bias=True, qk_scale=None):
 
         super().__init__()
-        self.dim = dim
+        self.embed_dim = embed_dim
         self.num_heads = num_heads
-        head_dim = dim // num_heads
+        head_dim = embed_dim // num_heads
         self.scale = qk_scale or head_dim ** -0.5
 
         # QKV and output projection
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.proj = nn.Linear(dim, dim)
+        self.qkv = nn.Linear(embed_dim, embed_dim * 3, bias=qkv_bias)
+        self.proj = nn.Linear(embed_dim, embed_dim)
 
         self.softmax = nn.Softmax(dim=-1)
 

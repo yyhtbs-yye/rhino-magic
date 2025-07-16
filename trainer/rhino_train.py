@@ -36,7 +36,7 @@ def main(args):
     if use_multigpu:
         from trainer.multigpu_trainer import MultiGPUTrainer as Trainer
         # devices = trainer_cfg.get('devices', list(range(min(9, torch.cuda.device_count()))))
-        devices = trainer_cfg.get('devices', [0, 9, 10, 11])
+        devices = trainer_cfg.get('devices', [0, 1, 2, 3, 8, 9, 10, 11])
     else:
         # Single process training
         from trainer.simple_trainer import Trainer

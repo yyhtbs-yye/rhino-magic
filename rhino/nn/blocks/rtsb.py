@@ -15,36 +15,34 @@ class RTSB(nn.Module):
     """
     def __init__(self,
                  block_cls,
-                 embed_dim,
-                 depth,
-                 num_heads,
-                 window_size,
-                 mlp_ratio,
-                 qkv_bias):
+                 **args):
         super().__init__()
         self.blocks = nn.ModuleList()
-        shift_size = tuple(ws // 2 for ws in window_size)
+
+        depth = args.pop('depth', 1)  # Default depth is 1 if not specified
+        triggers = args.pop('triggers', None)  # Optional triggers for each block
+
+        if triggers is not None:
+            assert len(triggers) == depth, "len(triggers) must equal depth"
+
         for i in range(depth):
             self.blocks.append(
                 block_cls(
-                    dim         = embed_dim,
-                    num_heads   = num_heads,
-                    window_size = window_size,
-                    shift_size  = shift_size,
-                    mlp_ratio   = mlp_ratio,
-                    qkv_bias    = qkv_bias,
-                    shifted     = (i % 2 == 1)
+                    trigger = triggers[i] if triggers is not None else None,  # Use trigger if provided
+                    **args,  # Pass all other arguments to the block
                 )
             )
-        self.norm = nn.LayerNorm(embed_dim)
+        self.norm = nn.LayerNorm(args['embed_dim'])
 
-    def forward(self, x):
+    def forward(self, x, cond=None):
         """
         x: (B, *T, H, W, C)
         """
-        res = x
+        shortcut = x
         for blk in self.blocks:
-            x = blk(x)
-        x = x + res
+            x = blk(x, cond)
+        
         x = self.norm(x)
+
+        x = x + shortcut
         return x
