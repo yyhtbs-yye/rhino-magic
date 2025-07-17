@@ -8,5 +8,6 @@ rhino_magic.egg-info/requires.txt
 rhino_magic.egg-info/top_level.txt
 trainer/__init__.py
 trainer/callback_template.py
+trainer/multigpu_trainer.py
 trainer/rhino_train.py
 trainer/simple_trainer.py

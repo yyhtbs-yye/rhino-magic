@@ -6,26 +6,26 @@ _vars:
       path: 'rhino.nn.baked.hat'
       name: 'HAT'
       params: 
-        upscale: 4
+        upscale: 8
         img_size: 64
         embed_dim: 96
-        depths: [4, 4, 4]
-        num_heads: [6, 6, 6]
+        depths: [4, 4, 4, 4]
+        num_heads: [6, 6, 6, 6]
         window_size: 16
         upsampler: 'pixelshuffle'
 
   device: 'cuda:11'
 
-  train_batch_size: 64
+  train_batch_size: 512
   valid_batch_size: 32
 
   train_folder_paths:
     gt: data/ffhq/ffhq_imgs/ffhq_256
-    lq: data/ffhq/ffhq_imgs/ffhq_64
+    lq: data/ffhq/ffhq_imgs/ffhq_32
     
   valid_folder_paths:
     gt: data/celeba/subsets/celeba_256
-    lq: data/celeba/subsets/celeba_64
+    lq: data/celeba/subsets/celeba_32
 
   experiment_name: hat_ffhq_32_256
 

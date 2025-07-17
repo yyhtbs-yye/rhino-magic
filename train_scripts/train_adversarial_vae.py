@@ -12,7 +12,7 @@ torch.set_float32_matmul_precision('high')
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
 
-config_path = "configs/train_vae_adversarial_256.yaml"
+config_path = "configs/train_vae_adversarial_256.yaml"~
 
 # Load YAML configuration
 with open(config_path, 'r') as f:
