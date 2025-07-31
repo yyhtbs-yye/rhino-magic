@@ -1,10 +1,11 @@
 import torch
-
 from rhino.boats.base.base_boat import BaseBoat
 from trainer.utils.build_components import build_module
-import importlib
-
-class BaseDiffusionBoat(BaseBoat):
+'''
+from trainer.utils.build_components import build_optimizer
+import accelerator
+'''
+class ControlNetBoat(BaseBoat):
 
     def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
         super().__init__()
@@ -12,10 +13,14 @@ class BaseDiffusionBoat(BaseBoat):
         assert boat_config is not None, "boat_config must be provided"
 
         self.models['net'] = build_module(boat_config['net'])
+
         self.models['scheduler'] = build_module(boat_config['scheduler'])
         self.models['solver'] = build_module(boat_config['solver'])
-        self.models['context_encoder'] = build_module(boat_config['context_encoder']) if 'context_encoder' in boat_config else None
-        self.models['latent_encoder'] = build_module(boat_config['latent_encoder']) if 'latent_encoder' in boat_config else None
+        self.models['condition_encoder'] = build_module(boat_config['condition_encoder'])
+        self.models['latent_encoder'] = build_module(boat_config['latent_encoder'])
+        self.models['prompt_tokenizer'] = build_module(boat_config['prompt_tokenizer'])
+        self.models['prompt_encoder'] = build_module(boat_config['prompt_encoder'])
+        
 
         self.boat_config = boat_config
         self.optimization_config = optimization_config or {}
@@ -29,31 +34,38 @@ class BaseDiffusionBoat(BaseBoat):
             self._setup_ema()
             self.ema_start = self.optimization_config.get('ema_start', 0)
 
+        '''
+    def configure_optimizers(self):
+        super().configure_optimizers()
 
-        module_path, attr_name = boat_config['hooks']['type'].rsplit(".", 1)
+        self.models['net'], self.optimizers['net'], self.lr_schedulers['net'] = accelerator.prepare(
+            self.models['net'], self.optimizers['net'], self.lr_schedulers['net']
+        )
+        # Move models to device
+        self.models['latent_encoder'].to(accelerator.device)
+        self.models['prompt_encoder'].to(accelerator.device)
+        '''
 
-        module = importlib.import_module(module_path)
-        hook_fn = getattr(module, attr_name)
-
-        self._install_forward_hooks(boat_config['hooks']['model_layer_names'], hook_fn)
-
-    def forward(self, z0, c=None):
+    def forward(self, z0, prompt=None, c=None):
         
         network_in_use = self.models['net_ema'] if self.use_ema and 'net_ema' in self.models else self.models['net']
 
-        context_encoder = self.models.get('context_encoder', None)
-
-        if c is not None and context_encoder is not None:
-            encoder_hidden_states = context_encoder(c)
+        # Prompt → CLIP embeddings -----------------------------------------
+        if prompt is not None and self.models.get("prompt_tokenizer") is not None and self.models.get("prompt_encoder") is not None:
+            # We assume the prompt_encoder expects a list/str and returns embeddings.
+            tokens = self.models['prompt_tokenizer'](prompt)
+            prompt_latents = self.models["prompt_encoder"](tokens)
         else:
-            encoder_hidden_states = None
+            prompt_latents = None
+
+        if c is not None and self.models.get("condition_encoder")  is not None:
+            condition_latents = self.models["condition_encoder"](c)
+        else:
+            condition_latents = None
             
-        hz1 = self.models['solver'].solve(network_in_use, z0, encoder_hidden_states)
+        hz1 = self.models['solver'].solve(network_in_use, z0, prompt_latents, condition_latents)
 
-        if self.models['latent_encoder'] is not None:
-            hx1 = self.decode_latents(hz1)
-        else:
-            hx1 = hz1
+        hx1 = self.decode_latents(hz1)
         
         result = torch.clamp(hx1, -1, 1)
         
@@ -61,39 +73,38 @@ class BaseDiffusionBoat(BaseBoat):
         
     def training_calc_losses(self, batch, batch_idx):
 
-        x1 = batch['gt']
-        c = batch.get('cond', None)
+        x1 = batch["gt"]                       # target RGB
+        c = batch.get("cond", None)           # spatial condition
+        prompt = batch.get("prompt", None)    # text prompt(s)
 
-        if self.models['context_encoder'] is not None:
-            encoder_hidden_states = self.models['context_encoder'](c)
+        if prompt is not None and self.models.get("prompt_tokenizer") is not None and self.models.get("prompt_encoder") is not None:
+            # We assume the prompt_encoder expects a list/str and returns embeddings.
+            tokens = self.models['prompt_tokenizer'](prompt)
+            prompt_latents = self.models["prompt_encoder"](tokens)
         else:
-            encoder_hidden_states = None
+            prompt_latents = None
+
+        if c is not None and self.models.get("condition_encoder")  is not None:
+            condition_latents = self.models["condition_encoder"](c)
+        else:
+            condition_latents = None
 
         batch_size = x1.size(0)
         
-        if self.models['latent_encoder'] is not None:
-            with torch.no_grad():
-                z1 = self.encode_images(x1)
-        else:
-            z1 = x1
+        with torch.no_grad():
+            z1 = self.encode_images(x1)
 
         # Initialize random noise in latent space
         z0 = torch.randn_like(z1)
 
-        # Sample random timesteps
         timesteps = self.models['scheduler'].sample_timesteps(batch_size, self.device)
-        
-        # Add noise to latents according to noise schedule
         zt = self.models['scheduler'].perturb(z1, z0, timesteps)
-
-        # Get targets for the denoising process
         targets = self.models['scheduler'].get_targets(z1, z0, timesteps)
         
-        preds = self.models['net'](zt, timesteps, encoder_hidden_states=encoder_hidden_states)['sample']
+        preds = self.models['net'](zt, timesteps, 
+                                   prompt_latents=prompt_latents, condition_latents=condition_latents)['sample']
         
         weights = self.models['scheduler'].get_loss_weights(timesteps)
-
-        self._collect_from_forward_hooks(batch, batch_idx)
 
         train_output = {
             'preds': preds,
@@ -112,7 +123,6 @@ class BaseDiffusionBoat(BaseBoat):
         
         self._backward(total_loss)
 
-
     def training_step(self):
 
         self._step()
@@ -126,18 +136,16 @@ class BaseDiffusionBoat(BaseBoat):
     def validation_step(self, batch, batch_idx):
 
         x1 = batch['gt']
-        c = batch.get('cond', None)
+        c = batch.get("cond", None)
+        prompt = batch.get("prompt", None)
 
         with torch.no_grad():
 
-            if self.models['latent_encoder'] is not None:
-                z1 = self.encode_images(x1)
-            else:
-                z1 = x1
+            z1 = self.encode_images(x1)
 
             z0 = torch.randn_like(z1)
 
-            hx1 = self.forward(z0, c)
+            hx1 = self.forward(z0, prompt, c)
 
             valid_output = {'preds': hx1, 'targets': x1,}
 

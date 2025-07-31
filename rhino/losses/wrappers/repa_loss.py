@@ -1,8 +1,6 @@
-import torch
 import torch.nn as nn
-from typing import Callable, Union
-from rhino.nn.losses.projection_alignment_loss import ProjectionAlignmentLoss
-from rhino.nn.losses.weighted_losses import WeightedLoss
+from rhino.losses.projection_alignment_loss import ProjectionAlignmentLoss
+from rhino.losses.weighted_losses import WeightedLoss
 
 class REPALoss(nn.Module):
     """
@@ -14,7 +12,7 @@ class REPALoss(nn.Module):
         self,
         feature_dim: int,
         target_dim: int,
-        feature_extractor_name: str = 'dinov2_patch',
+        feature_extractor_name = None,
         proj_weight: float = 0.5,
         rec_weight: float = 1.0,
         base_loss_fn_str: str = "mse",              # 'mse' | 'l1'
@@ -22,8 +20,11 @@ class REPALoss(nn.Module):
     ):
         super().__init__()
         proj_kwargs = proj_kwargs or {}
+        self.opt_id = 'net'
 
-        if feature_extractor_name == 'dinov2_patch':
+        if feature_extractor_name is None:
+            feature_extractor = None
+        elif feature_extractor_name == 'dinov2_patch':
             from rhino.feature_extractors.dinov2_patch import DinoV2Patch
             feature_extractor = DinoV2Patch()
         else:
@@ -39,19 +40,26 @@ class REPALoss(nn.Module):
         self.rec_weight = rec_weight
 
     def forward(self, train_output):
-        zs_hat = train_output["predictions"]
-        repa_targets = train_output["repa_targets"]
-        recon_targets = train_output["recon_targets"]
+        preds = train_output["preds"]
+        targets = train_output["targets"]
+        weights = train_output.get("weights", None)
 
-        # Optional weights for reconstruction loss
-        weights = train_output.get("recon_weights", None)
+        hook_fx = train_output["hook_fx"]
 
-        loss_proj = self.proj_loss(zs_hat, repa_targets)
+        fx = train_output["fx"]
+
+        loss_proj = None
+        for layer_name in hook_fx:
+            fx_preds = hook_fx[layer_name]
+            if loss_proj is None:
+                loss_proj = self.proj_loss(fx_preds, fx)
+            else:
+                loss_proj += self.proj_loss(fx_preds, fx)
 
         if weights is not None and isinstance(self.rec_loss_fn, WeightedLoss):
-            loss_rec = self.rec_loss_fn(zs_hat, recon_targets, weights)
+            loss_rec = self.rec_loss_fn(preds, targets, weights)
         else:
-            loss_rec = self.rec_loss_fn(zs_hat, recon_targets)
+            loss_rec = self.rec_loss_fn(preds, targets)
 
         loss_total = self.proj_weight * loss_proj + self.rec_weight * loss_rec
         return loss_total, {"proj": loss_proj, "recon": loss_rec}

@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from rhino.nn.minimals.mlp import TwoLayerMLP
 from rhino.nn.minimals.wmsa import WindowMultiheadSelfAttention
-from rhino.nn.pe.relative_position_bias_3d import RelativePositionBias3D
+from rhino.nn.minimals.pe.relative_position_bias_3d import RelativePositionBias3D
 
 from rhino.nn.utils import windowing, masking
     

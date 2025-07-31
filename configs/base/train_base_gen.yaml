@@ -6,7 +6,7 @@ boat:
 
   loss:
     net:
-      path: 'rhino.loss_wrappers.pixel_loss'
+      path: 'rhino.losses.wrappers.pixel_loss'
       name: 'PixelLoss'
       params: {}
 
@@ -52,7 +52,7 @@ data:
   config: 
     train_dataloader: 
       dataset:
-        path: 'trainer.torch_datasets.basic_image_dataset'
+        path: 'rhino.datasets.basic_image_dataset'
         name: 'BasicImageDataset'
         params: 
           folder_paths: $train_folder_paths
@@ -76,7 +76,7 @@ data:
     
     valid_dataloader: 
       dataset: 
-        path: 'trainer.torch_datasets.basic_image_dataset'
+        path: 'rhino.datasets.basic_image_dataset'
         name: 'BasicImageDataset'
         params: 
           folder_paths: $valid_folder_paths

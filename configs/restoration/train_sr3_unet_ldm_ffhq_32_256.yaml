@@ -5,7 +5,7 @@ boat:
   name: 'BaseDiffusionBoat'            
 
   latent_encoder:
-    path: 'rhino.nn_wrappers.autoencoder_kl_wrapper' 
+    path: 'rhino.nn.wrappers.autoencoder_kl_wrapper' 
     name: 'AutoencoderKLWrapper'
     pretrained: 'stabilityai/sd-vae-ft-mse'
 
