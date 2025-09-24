@@ -2,14 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from einops import rearrange
 
 class ProjectionAlignmentLoss(nn.Module):
     def __init__(self, feature_dim, target_dim, 
                  feature_extractor=None, 
                  normalize: bool = True, mode: str = "feature"):
         super().__init__()
-        assert mode in ("image", "feature"), f"Unsupported mode: {mode}"
+        assert mode in ("image", "features"), f"Unsupported mode: {mode}"
         self.feature_extractor = feature_extractor
         self.normalize = normalize
         self.mode = mode
@@ -32,11 +31,8 @@ class ProjectionAlignmentLoss(nn.Module):
         if len(features) != len(targets): # Ensure features and zs_ref have the same length (batch size)
             raise ValueError(f"Mismatched lengths: features={len(features)} vs zs_ref={len(targets)}")
 
-        targets = targets.squeeze().detach()
-        
         loss = 0.0
         for z_pred, z_ref in zip(features, targets):
-            
             z_pred = self.proj_head(z_pred)
             if self.normalize:
                 z_pred = F.normalize(z_pred, dim=-1)

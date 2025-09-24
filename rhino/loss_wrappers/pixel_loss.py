@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Any
-from rhino.losses.weighted_losses import WeightedLoss
+from rhino.nn.losses.weighted_losses import WeightedLoss
 
 class PixelLoss(nn.Module):
     """

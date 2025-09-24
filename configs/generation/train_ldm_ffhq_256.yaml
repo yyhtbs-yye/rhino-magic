@@ -1,8 +1,8 @@
 _import: configs/base/train_base_ddim.yaml
 
 boat:
-  path: 'rhino.diffusers.boats.unconditioned.latent_diffusing'
-  name: 'UnconditionedLatentDiffusionBoat'
+  path: 'rhino.boats.diffusion.base_diffusion_boat'
+  name: 'BaseDiffusionBoat'
   
   encoder:
     path: 'rhino.autoencoders.networks.autoencoder_wrappers'   # Path to import the model class
@@ -11,7 +11,7 @@ boat:
 
 _vars:
 
-  devices: [1]
+  devices: [0, 1]
 
   batch_size: 16
 
