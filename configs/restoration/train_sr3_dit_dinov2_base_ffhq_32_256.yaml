@@ -49,7 +49,7 @@ data:
   config: 
     train_dataloader: 
       dataset:
-        path: 'rhino.datasets.basic_image_dataset'
+        path: 'trainer.torch_datasets.basic_image_dataset'
         name: 'BasicImageDataset'
         params: 
           folder_paths:
@@ -83,7 +83,7 @@ data:
     
     valid_dataloader: 
       dataset: 
-        path: 'rhino.datasets.basic_image_dataset'
+        path: 'trainer.torch_datasets.basic_image_dataset'
         name: 'BasicImageDataset'
         params: 
           folder_paths: 

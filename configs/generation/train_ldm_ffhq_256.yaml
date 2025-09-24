@@ -1,11 +1,11 @@
 _import: configs/base/train_base_ddim.yaml
 
 boat:
-  path: 'rhino.boats.diffusion.base_diffusion_boat'
-  name: 'BaseDiffusionBoat'
+  path: 'rhino.boats.diffusion.latent_diffusion_boat'
+  name: 'LatentDiffusionBoat'
   
-  encoder:
-    path: 'rhino.autoencoders.networks.autoencoder_wrappers'   # Path to import the model class
+  latent_encoder:
+    path: 'rhino.nn_wrappers.autoencoder_kl_wrapper'   # Path to import the model class
     name: 'AutoencoderKLWrapper'              # Name of the model class to use
     pretrained: 'stabilityai/sd-vae-ft-mse'  # Example: A common pretrained VAE from Stable Diffusion
 
@@ -13,7 +13,8 @@ _vars:
 
   devices: [0, 1]
 
-  batch_size: 16
+  batch_size: 64
+  num_workers: 64
 
   in_channels: 4
   out_channels: 4
