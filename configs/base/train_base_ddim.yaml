@@ -95,7 +95,7 @@ data:
   config: 
     train_dataloader:
       dataset:
-        path: 'trainer.torch_datasets.basic_image_dataset'
+        path: 'rhino.datasets.basic_image_dataset'
         name: 'BasicImageDataset'         # Name of the model class to use
         params:
           folder_paths: $train_folder_paths
@@ -119,7 +119,7 @@ data:
     # Validation dataloader configuration
     valid_dataloader:
       dataset:
-        path: 'trainer.torch_datasets.basic_image_dataset'           # Path to import the model class
+        path: 'rhino.datasets.basic_image_dataset'           # Path to import the model class
         name: 'BasicImageDataset'         # Name of the model class to use
         params:
           folder_paths: $valid_folder_paths

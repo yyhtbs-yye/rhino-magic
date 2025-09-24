@@ -3,7 +3,7 @@ _import: configs/base/train_base_disc.yaml
 _vars:
 
   net:
-      path: 'rhino.nn.baked.hat'
+      path: 'rhino.nn.baked.sisr.hat.hat'
       name: 'HAT'
       params: 
         upscale: 8

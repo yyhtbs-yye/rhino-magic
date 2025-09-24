@@ -1,8 +1,18 @@
 _import: configs/base/train_base_sr3.yaml
 
 boat:
+<<<<<<< HEAD
   path: 'rhino.boats.diffusion.sr3_diffusion_boat'
   name: 'SR3DiffusionBoat'            
+=======
+  path: 'rhino.boats.diffusions.base_diffusion_boat'
+  name: 'BaseDiffusionBoat'            
+
+  latent_encoder:
+    path: 'rhino.nn.wrappers.autoencoder_kl_wrapper' 
+    name: 'AutoencoderKLWrapper'
+    pretrained: 'stabilityai/sd-vae-ft-mse'
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
 
   context_encoder:
     path: torch.nn

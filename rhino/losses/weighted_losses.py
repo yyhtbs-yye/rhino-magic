@@ -31,7 +31,7 @@ class WeightedLoss(nn.Module):
 
         # Reduce over all but the batch dimension
         if elementwise_loss.dim() > 1:
-            loss_per_sample = elementwise_loss.view(elementwise_loss.size(0), -1).mean(dim=1)
+            loss_per_sample = elementwise_loss.reshape(elementwise_loss.size(0), -1).mean(dim=1)
         else:
             loss_per_sample = elementwise_loss  # For 1D outputs
 

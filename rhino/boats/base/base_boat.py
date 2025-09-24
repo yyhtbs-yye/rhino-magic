@@ -1,14 +1,42 @@
 import torch
 
 from trainer.utils.state_load_save import save_state, load_state
+<<<<<<< HEAD
 from trainer.utils.build_components import build_module, build_modules, build_optimizer, build_lr_scheduler
+=======
+from trainer.utils.build_components import build_module, build_modules, build_optimizer, build_lr_scheduer
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
 from trainer.visualizers.basic_visualizer import visualize_image_dict
-
+from rhino.helpers.hooks.basic_hooks import named_forward_hook
 from copy import deepcopy
 
+<<<<<<< HEAD
 from rhino.boats.base.template_boat import TemplateBoat
 
 from trainer.utils.ddp_utils import ddp_no_sync_all, move_to_device
+=======
+from functools import partial
+
+class BaseBoat(ABC):
+    """
+    Abstract base class for model containers to be used with the Trainer.
+    
+    A "Boat" represents a container for models, optimizers, and training logic,
+    but is not itself a nn.Module.
+    """
+
+    def __init__(self):
+        """
+        Initialize the BaseBoat.
+        
+        """
+        self.models = {}  # Dictionary to hold PyTorch models
+        self.losses = {}  # Dictionary to hold PyTorch Loss functions
+        self.optimizers = {}  # Dictionary to hold optimizers
+        self.lr_schedulers = {}  # Dictionary to hold learning rate lr_schedulers
+        self.device = None
+        self.hook_memories = {}  # Memory for storing outputs from forward hooks
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
 
 class BaseBoat(TemplateBoat):
 
@@ -39,10 +67,52 @@ class BaseBoat(TemplateBoat):
             for name, metric in self.metrics.items():
                 if hasattr(metric, 'to'):
                     self.metrics[name] = metric.to(device)
+        
+
+        self.move_losses_to_device(device)
+
         # Move optimizer states to the same device
         self.move_optimizer_to_device(device)
         return self
 
+<<<<<<< HEAD
+=======
+    def move_losses_to_device(self, device):
+        """
+        Move all loss functions to the specified device.
+        
+        Args:
+            device: The device to move the losses to (e.g., 'cuda:3', 'cpu')
+            
+        Returns:
+            None
+        """
+        for name, loss in self.losses.items():
+            if hasattr(loss, 'to'):
+                self.losses[name] = loss.to(device)
+
+    def move_optimizer_to_device(self, device):
+        """
+        Explicitly move optimizer state tensors to the specified device.
+        
+        Args:
+            device: The device to move the optimizer states to (e.g., 'cuda:3', 'cpu')
+            
+        Returns:
+            None
+        """
+        for name, optim in self.optimizers.items():
+            # Move all state tensors to the specified device
+            for param in optim.state:
+                state = optim.state[param]
+                for key, value in state.items():
+                    if torch.is_tensor(value):
+                        state[key] = value.to(device)
+            # Update param_groups to ensure they reference parameters on the correct device
+            for group in optim.param_groups:
+                group['params'] = [p.to(device) for p in group['params']]
+
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
     def parameters(self):
         for model_name, model in self.models.items():
             if hasattr(model, 'parameters'):
@@ -75,15 +145,45 @@ class BaseBoat(TemplateBoat):
 
     # ------------------------------------ Training Step ---------------------------------------------
 
+<<<<<<< HEAD
     def training_backpropagation(self, loss, current_micro_step, scaler):
+=======
+    def configure_optimizers(self):
+        for model_name in self.optimization_config:
+            if 'use_ema' in model_name:
+                continue
+            self.optimizers[model_name] = build_optimizer(
+                self.models[model_name].parameters(), 
+                self.optimization_config[model_name]
+            )
+
+        for loss_name in self.losses:
+            loss_fn = self.losses[loss_name]
+            if hasattr(loss_fn, 'opt_id'):
+                self.optimizers[loss_fn.opt_id].add_param_group({'params': loss_fn.parameters()})
+
+        self.configure_lr_scheduers()
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
 
         use_no_sync = (self.total_micro_steps > 1) and (current_micro_step < self.total_micro_steps - 1)
 
+<<<<<<< HEAD
         with ddp_no_sync_all(self, enabled=use_no_sync):
             if scaler is not None and getattr(scaler, "is_enabled", lambda: False)():
                 scaler.scale(loss).backward()
             else:
                 loss.backward()
+=======
+        for loss_name in self.losses:
+            loss_fn = self.losses[loss_name]
+            loss_val = loss_fn(train_output)
+
+            if isinstance(loss_val, tuple):
+                loss_val, loss_info = loss_val
+                
+            losses['total_loss'] += loss_val
+            losses[loss_name] = loss_val
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
 
     def training_gradient_descent(self, scaler, active_keys):
 
@@ -211,6 +311,7 @@ class BaseBoat(TemplateBoat):
 
     def _update_ema(self):
 
+<<<<<<< HEAD
         if self.use_ema and self.get_global_step() >= self.ema_start:
             """Update EMA model parameters."""
             if not self.use_ema: return
@@ -339,3 +440,37 @@ class BaseBoat(TemplateBoat):
                 out[k] = sum(vals) / len(vals)
 
         return out
+=======
+        for ema_param, param in zip(self.models['net_ema'].parameters(), self.models['net'].parameters()):
+            ema_param.data.mul_(self.ema_decay).add_(param.data, alpha=1 - self.ema_decay)
+        for ema_buffer, buffer in zip(self.models['net_ema'].buffers(), self.models['net'].buffers()):
+            ema_buffer.data.copy_(buffer.data)
+
+    def _install_forward_hooks(self, model_layer_names={}, hook_fn=named_forward_hook):
+        for model_name in model_layer_names:
+
+            if model_name not in self.hook_memories:
+                self.hook_memories[model_name] = {}
+
+            if model_name not in self.models:
+                continue
+            
+            layer_names = model_layer_names[model_name]
+            if isinstance(layer_names, str):
+                layer_names = [layer_names]
+
+            for layer_name in layer_names:
+                hook_handle = self.models[model_name].get_submodule(layer_name).register_forward_hook(
+                    partial(hook_fn, layer_name, self.hook_memories[model_name])
+                )
+
+    def _collect_from_forward_hooks(self, batch, batch_idx):
+        if 'hook_fx' not in batch:
+            batch['hook_fx'] = {}
+        for model_name, memory in self.hook_memories.items():
+            for layer_name, output in memory.items():
+                if output is not None:
+                    batch['hook_fx'][f"{model_name}_{layer_name}"] = output
+        return batch
+
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3

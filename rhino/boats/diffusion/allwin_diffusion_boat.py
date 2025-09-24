@@ -2,6 +2,7 @@ import torch
 
 from rhino.boats.diffusion.base_diffusion_boat import BaseDiffusionBoat
 from trainer.utils.build_components import build_module
+import importlib
 
 from trainer.utils.ddp_utils import move_to_device
 
@@ -34,7 +35,19 @@ class AllwinDiffusionBoat(BaseDiffusionBoat):
             self._setup_ema()
             self.ema_start = self.optimization_config.get('ema_start', 0)
 
+<<<<<<< HEAD:rhino/boats/diffusion/allwin_diffusion_boat.py
     def predict(self, z0, c=None):
+=======
+
+        module_path, attr_name = boat_config['hooks']['type'].rsplit(".", 1)
+
+        module = importlib.import_module(module_path)
+        hook_fn = getattr(module, attr_name)
+
+        self._install_forward_hooks(boat_config['hooks']['model_layer_names'], hook_fn)
+
+    def forward(self, z0, c=None):
+>>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3:rhino/boats/diffusions/base_diffusion_boat.py
         
         network_in_use = self.models['net_ema'] if self.use_ema and 'net_ema' in self.models else self.models['net']
 
@@ -89,6 +102,8 @@ class AllwinDiffusionBoat(BaseDiffusionBoat):
         preds = self.models['net'](zt, timesteps, encoder_hidden_states=encoder_hidden_states)['sample']
         
         weights = self.models['scheduler'].get_loss_weights(timesteps)
+
+        self._collect_from_forward_hooks(batch, batch_idx)
 
         train_output = {
             'preds': preds,
