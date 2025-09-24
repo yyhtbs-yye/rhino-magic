@@ -50,9 +50,9 @@ class Trainer:
         self.save_images = trainer_config.get('save_images', False)
         self.logger = logger
         
-        boat.configure_optimizers()
-        boat.configure_losses()
-        boat.configure_metrics()
+        boat.build_optimizers()
+        boat.build_losses()
+        boat.build_metrics()
 
         if resume_from:
             self.resume_from = Path(resume_from) if isinstance(resume_from, str) else resume_from
@@ -112,10 +112,10 @@ class Trainer:
 
                 losses = self.boat.training_calc_losses(batch, batch_idx)
 
-                self.boat.training_backward(losses)
-                self.boat.training_step()
+                self.boat.training_backpropagation(losses)
+                self.boat.training_gradient_descent()
 
-                self.boat.lr_scheduling_step() 
+                self.boat.training_lr_scheduling_step() 
 
                 total_loss = losses['total_loss']
 

@@ -4,7 +4,7 @@ import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from trainer.data_modules.image_data_module import SimpleTrainValidDataModule
+from trainer.data_modules.image_data_module import DistTrainSingleValidDataModule
 from rhino.diffusers.boats.superresolution.dps_pixel_diffusing import DPSPixelDiffusionModel
 
 # Path to configuration file
@@ -28,7 +28,7 @@ model = DPSPixelDiffusionModel(
 )
 
 # Create data module
-data_module = SimpleTrainValidDataModule(data_config)
+data_module = DistTrainSingleValidDataModule(data_config)
 data_module.setup("validate")  # Only setup the validation part
 
 # Set up logger

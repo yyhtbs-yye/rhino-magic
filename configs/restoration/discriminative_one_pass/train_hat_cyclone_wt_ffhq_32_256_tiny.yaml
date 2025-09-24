@@ -1,0 +1,41 @@
+_import: configs/base/train_base_restoration.yaml
+
+_vars:
+
+  net:
+      path: 'cyclone.impl.hat.hat_arch'
+      name: 'HAT'
+      params: 
+        scale: 8
+        dim: 96
+        depths: [3, 3, 3, 3]
+        num_heads: 16
+        window_size: 16
+
+  loss: 
+      net:
+        path: 'rhino.loss_wrappers.wavelet.pixel_loss_wt'
+        name: 'PixelLossWT'
+        params: 
+          level: 3
+          wavelet: db2
+          detail_weight: [0.33, 0.33, 0.33]
+
+  max_epochs: 150
+
+  devices: [3]
+
+  train_batch_size: 64
+  valid_batch_size: 64
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_256
+    lq: data/ffhq/ffhq_imgs/ffhq_32
+    
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_256
+    lq: data/celeba/subsets/celeba_32
+
+  experiment_name: hat_cyclone_wt_ffhq_32_256
+
+  ema_start: 0

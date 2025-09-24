@@ -31,9 +31,9 @@ The `BaseBoat` is an abstract base class (like a template) that all boats inheri
 | -------------------------------- | ----------------------------------------------- |
 | `models`, `losses`, `optimizers` | Hold your training components                   |
 | `to(device)`                     | Move everything to GPU or CPU                   |
-| `training_step()`                | What happens in one training iteration          |
+| `training_gradient_descent()`                | What happens in one training iteration          |
 | `validation_step()`              | What happens in one validation step             |
-| `configure_optimizers()`         | How optimizers and schedulers are set up        |
+| `build_optimizers()`         | How optimizers and schedulers are set up        |
 | `save_state()` / `load_state()`  | Save/load the training state for resuming       |
 | `manual_backward()`              | Support for manual or distributed backward pass |
 
@@ -46,7 +46,7 @@ You must implement the key training/validation methods in any subclass.
 The `BaseDiffusionBoat` is a real boat built for training diffusion models. It uses the BaseBoat interface and adds features like:
 
 * 🛠 `build_module()` to dynamically create models from configs
-* ✅ Loss and metric setup via `configure_losses()` and `configure_metrics()`
+* ✅ Loss and metric setup via `build_losses()` and `build_metrics()`
 * 🔁 EMA (Exponential Moving Average) to smooth model weights during training
 * 🖼️ Visual logging during validation
 

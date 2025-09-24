@@ -73,6 +73,12 @@ def save_state(run_folder, prefix="boat_state", boat=None, global_step=None, epo
 
     return state_path
 
+def strip_module_prefix(s: str) -> str:
+    return s[7:] if s.startswith("module.") else s
+
+def strip_module_from_state_dict(sd: dict) -> dict:
+    return {strip_module_prefix(k): v for k, v in sd.items()}
+
 def load_state(state_path, boat=None, strict=True):
     """
     Load the full training state including boat model weights, optimizer states,
@@ -99,7 +105,7 @@ def load_state(state_path, boat=None, strict=True):
         model_states = state['model_states']
         for name, state_dict in model_states.items():
             if name in boat.models:
-                boat.models[name].load_state_dict(state_dict, strict=strict)
+                boat.models[name].load_state_dict(strip_module_from_state_dict(state_dict), strict=strict)
             else:
                 print(f"Warning: Model {name} in saved state not found in boat")
     

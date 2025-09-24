@@ -69,7 +69,7 @@ optimization:
     ema_start: $ema_start
 
 trainer: 
-  device: $device
+  devices: $devices
   max_epochs: 100
   val_check_epochs: 1
   state_save_epochs: 1
@@ -93,7 +93,7 @@ validation:
 
 data: 
   path: trainer.data_modules.image_data_module
-  name: SimpleTrainValidDataModule
+  name: DistTrainSingleValidDataModule
   config: 
     train_dataloader: 
       dataset:
@@ -103,16 +103,16 @@ data:
           folder_paths: $train_folder_paths
           data_prefix:
             gt: ''
-            cond: ''
+            lq: ''
           pipeline:
             - type: LoadImageFromFile
-              keys: [gt, cond]
+              keys: [gt, lq]
             - type: Normalize
-              keys: [gt, cond]
+              keys: [gt, lq]
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
       batch_size: $train_batch_size
-      num_workers: $train_batch_size
+      num_workers: $num_workers
       pin_memory: false
       persistent_workers: false
       sampler:
@@ -127,16 +127,16 @@ data:
           folder_paths: $valid_folder_paths
           data_prefix:
             gt: ''
-            cond: ''
+            lq: ''
           pipeline:
             - type: LoadImageFromFile
-              keys: [gt, cond]
+              keys: [gt, lq]
             - type: Normalize
-              keys: [gt, cond]
+              keys: [gt, lq]
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
       batch_size: $valid_batch_size
-      num_workers: $valid_batch_size
+      num_workers: $num_workers
       persistent_workers: true
       sampler:
         type: DefaultSampler

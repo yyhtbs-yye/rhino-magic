@@ -1,0 +1,71 @@
+_import: configs/base/train_base_restoration.yaml
+
+boat: 
+  path: 'rhino.boats.restoration.adversarial_restoration_boat'
+  name: 'AdversarialRestorationBoat'            
+
+  net:
+      path: 'cyclone.impl.hat.hat_arch'
+      name: 'HAT'
+      params: 
+        scale: 8
+        dim: 96
+        depths: [3, 3, 3, 3]
+        num_heads: 16
+        window_size: 16
+
+  classifier:
+      path: 'rhino.nn.classifiers.adversarial_discriminators'
+      name: 'PatchGANDiscriminator'
+      params: {}
+
+  loss: 
+      net:
+        path: 'rhino.loss_wrappers.pixel_loss'
+        name: 'PixelLoss'
+        params: {}
+      
+optimization: 
+
+  net:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0001
+      betas: [0.9, 0.999]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  classifier:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.00005
+      betas: [0.9, 0.999]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  use_ema:
+    ema_decay: 0.999
+    ema_start: $ema_start
+
+_vars:
+
+  max_epochs: 150
+
+  devices: [0]
+
+  train_batch_size: 64
+  valid_batch_size: 64
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_256
+    lq: data/ffhq/ffhq_imgs/ffhq_32
+    
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_256
+    lq: data/celeba/subsets/celeba_32
+
+  experiment_name: hat_cyclone_adversarial_ffhq_32_256
+
+  ema_start: 0

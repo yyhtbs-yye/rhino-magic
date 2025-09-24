@@ -1,0 +1,68 @@
+_import: configs/base/train_base_gan.yaml
+
+loss:
+  net:
+    path: 'rhino.nn.losses.gan_losses'
+    name: 'BCEGANLoss'
+    params: {}
+
+  critic:
+    path: 'rhino.nn.losses.gan_losses'
+    name: 'BCEGANLoss'
+    params: {}
+    
+
+optimization: 
+  net:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0002
+      betas: [0.5, 0.990]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  critic:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0002
+      betas: [0.5, 0.99]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  use_ema:
+    ema_decay: 0.999
+    ema_start: $ema_start
+
+_vars:
+
+  devices: [0, 1]
+
+  net: 
+    path: 'rhino.nn.baked.gan.dcgan.dcgan_generator'
+    name: 'DCGANGenerator'
+    params:
+      output_scale: 256
+
+  critic:
+    path: 'rhino.nn.baked.gan.dcgan.dcgan_discriminator'
+    name: 'DCGANDiscriminator'
+    params: 
+      input_scale: 256
+      output_scale: 4
+      out_channels: 16
+
+  train_batch_size: 64
+  valid_batch_size: 64
+  num_workers: 16
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_256
+    
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_256
+
+  experiment_name: dcgan_ffhq_256
+
+  ema_start: 0

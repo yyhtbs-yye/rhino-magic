@@ -1,8 +1,6 @@
 # trainer/rhino_train.py
 
-import os
 import torch
-import yaml
 from pathlib import Path
 from trainer.loggers.tensorboard import TensorBoardLogger
 from trainer.utils.path_helpers import determine_run_folder
@@ -35,7 +33,6 @@ def main(args):
     # Check if we're in a distributed environment (torchrun sets these)
     if use_multigpu:
         from trainer.multigpu_trainer import MultiGPUTrainer as Trainer
-        # devices = trainer_cfg.get('devices', list(range(min(9, torch.cuda.device_count()))))
         devices = trainer_cfg.get('devices', [0, 1, 2, 3])
     else:
         # Single process training

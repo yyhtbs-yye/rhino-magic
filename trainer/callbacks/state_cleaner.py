@@ -6,10 +6,10 @@ class KeepTopKStateCallback(Callback):
     def __init__(self, top_k=4):
         self.top_k = top_k
 
-    def on_epoch_end(self, trainer, model, epoch):
-        if len(trainer.valid_epoch_records) > 0:
+    def on_epoch_end(self, train_states, model, epoch):
+        if len(train_states['valid_epoch_records']) > 0:
             # get the non top k paths using get_non_top_k_state_paths
-            non_top_k_paths = get_non_top_k_state_paths(trainer.valid_epoch_records, self.top_k)
+            non_top_k_paths = get_non_top_k_state_paths(train_states['valid_epoch_records'], self.top_k)
             
             # delete all these non top k paths
             for path in non_top_k_paths:
@@ -20,9 +20,9 @@ class KeepTopKStateCallback(Callback):
                     except OSError as e:
                         print(f"Error removing {path}: {e}")
 
-        if len(trainer.valid_step_records) > 0:
+        if len(train_states['valid_step_records']) > 0:
             # Same logic can be applied for step records if needed
-            non_top_k_paths = get_non_top_k_state_paths(trainer.valid_step_records, self.top_k)
+            non_top_k_paths = get_non_top_k_state_paths(train_states['valid_step_records'], self.top_k)
             
             for path in non_top_k_paths:
                 if os.path.exists(path):

@@ -1,0 +1,124 @@
+_import: configs/base/train_base_gan.yaml
+
+boat:
+  path: 'rhino.boats.gan.pix2pix_gan_boat'
+  name: 'Pix2PixGanBoat'
+
+  net: 
+    path: 'rhino.nn.baked.gan.pix2pix.pix2pix_generator'
+    name: UnetGenerator
+    params:
+      in_channels: 6
+      out_channels: 3
+      num_down: 8
+      base_channels: 64
+      norm_cfg: 
+        type: 'GN'
+
+  critic:
+    path: 'rhino.nn.baked.gan.helpers.patch_disc'
+    name: 'PatchDiscriminator'
+    params: 
+      in_channels: 6
+      base_channels: 64
+      num_conv: 3
+      norm_cfg: 
+        type: 'GN'
+  
+  loss:
+    net:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+
+    critic:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+
+validation: 
+  save_images: true
+  num_vis_samples: 4
+  use_reference: true
+  metrics:
+    psnr:
+      path: 'torchmetrics.image'
+      name: 'PeakSignalNoiseRatio'
+      params:
+        data_range: 2.0
+    ssim:
+      path: 'torchmetrics.image'
+      name: 'StructuralSimilarityIndexMeasure'
+      params: {}
+  target_metric_name: 'psnr'
+
+data: 
+  path: trainer.data_modules.image_data_module
+  name: DistTrainSingleValidDataModule
+  config: 
+    train_dataloader: 
+      dataset:
+        path: 'trainer.torch_datasets.basic_image_dataset'
+        name: 'BasicImageDataset'
+        params: 
+          folder_paths: $train_folder_paths
+          data_prefix:
+            gt: ''
+            cond: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [gt, cond]
+            - type: Normalize
+              keys: [gt, cond]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $train_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: false
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+    
+    valid_dataloader: 
+      dataset: 
+        path: 'trainer.torch_datasets.basic_image_dataset'
+        name: 'BasicImageDataset'
+        params: 
+          folder_paths: $valid_folder_paths
+          data_prefix:
+            gt: ''
+            cond: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [gt, cond]
+            - type: Normalize
+              keys: [gt, cond]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $valid_batch_size
+      num_workers: $num_workers
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+
+_vars:
+
+  devices: [0, 1]
+
+  train_batch_size: 64
+  valid_batch_size: 64
+  num_workers: 16
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_256
+    cond: data/ffhq/ffhq_imgs/ffhq_32
+
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_256
+    cond: data/celeba/subsets/celeba_32
+
+  experiment_name: pix2pix_ffhq_256
+
+  ema_start: 0

@@ -39,7 +39,7 @@ def build_optimizer(model_parameters, config):
     else:
         raise ValueError("Configuration must contain 'params' key.")
 
-def build_lr_scheduer(optimizer, config):
+def build_lr_scheduler(optimizer, config):
     """Build a module from configuration."""
     class_ = get_class(config['path'], config['name'])
     

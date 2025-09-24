@@ -1,10 +1,10 @@
 boat:
-  path: 'rhino.diffusers.boats.unconditioned.pixel_diffusing'
-  name: 'UnconditionedPixelDiffusionBoat'
+  path: 'rhino.boats.diffusion.base_diffusion_boat'
+  name: 'BaseDiffusionBoat'
 
-  model:
-    path: 'diffusers.models.unets'   # Path to import the model class
-    name: 'UNet2DModel'              # Name of the model class to use
+  net:
+    path: 'diffusers.models.unets'
+    name: 'UNet2DModel'
     config:
       in_channels: $in_channels
       out_channels: $out_channels
@@ -19,7 +19,7 @@ boat:
   
   # Scheduler configuration
   scheduler:
-    path: 'rhino.diffusers.schedulers.scheduling_ddim'
+    path: 'rhino.diffusion_helpers.schedulers.scheduling_ddim'
     name: 'DDIMScheduler'
     config:
       beta_start: 0.0001
@@ -32,7 +32,7 @@ boat:
       num_train_timesteps: 1000
 
   solver:
-    path: 'rhino.diffusers.solvers.sampling_ddim'
+    path: 'rhino.diffusion_helpers.solvers.sampling_ddim'
     name: 'DDIMSampler'         # Name of the model class to use
     config:
       beta_start: 0.0001
@@ -46,14 +46,14 @@ boat:
       eta: 0.0                   # Parameter controlling noise level in sampling
       num_inference_steps: 50    # Default sampling steps for inference
 
-  loss:  # Added loss configuration block
-    model:
-      path: 'trainer.losses.weighted_losses'
-      name: 'WeightedMSELoss'
+  loss: 
+    net:
+      path: 'rhino.loss_wrappers.pixel_loss'
+      name: 'PixelLoss'
       params: {}
 
 optimization: 
-  model:
+  net:
     path: 'torch.optim'
     name: 'Adam'
     params:
@@ -61,12 +61,13 @@ optimization:
       betas: [0.9, 0.999]
       weight_decay: 0.0
     lr_scheduler: {}
+    
   use_ema:
     ema_decay: 0.999
     ema_start: $ema_start
 
 trainer: 
-  device: $device
+  devices: $devices
   max_epochs: 100
   val_check_epochs: 1
   state_save_epochs: 1
@@ -90,7 +91,7 @@ validation:
 # Data configuration
 data:
   path: trainer.data_modules.image_data_module
-  name: SimpleTrainValidDataModule
+  name: DistTrainSingleValidDataModule
   config: 
     train_dataloader:
       dataset:
@@ -108,7 +109,7 @@ data:
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
       batch_size: $batch_size
-      num_workers: $batch_size
+      num_workers: $num_workers
       pin_memory: false
       persistent_workers: true
       sampler:
@@ -132,7 +133,7 @@ data:
               mean: [0.5, 0.5, 0.5]
               std: [0.5, 0.5, 0.5]
       batch_size: $batch_size
-      num_workers: $batch_size
+      num_workers: $num_workers
       pin_memory: false
       persistent_workers: true
       sampler:
