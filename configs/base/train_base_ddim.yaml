@@ -19,7 +19,7 @@ boat:
   
   # Scheduler configuration
   scheduler:
-    path: 'rhino.diffusion_helpers.schedulers.scheduling_ddim'
+    path: 'rhino.helpers.diffusions.schedulers.scheduling_ddim'
     name: 'DDIMScheduler'
     config:
       beta_start: 0.0001
@@ -32,7 +32,7 @@ boat:
       num_train_timesteps: 1000
 
   solver:
-    path: 'rhino.diffusion_helpers.solvers.sampling_ddim'
+    path: 'rhino.helpers.diffusions.solvers.sampling_ddim'
     name: 'DDIMSampler'         # Name of the model class to use
     config:
       beta_start: 0.0001
@@ -46,9 +46,9 @@ boat:
       eta: 0.0                   # Parameter controlling noise level in sampling
       num_inference_steps: 50    # Default sampling steps for inference
 
-  loss: 
+  losses: 
     net:
-      path: 'rhino.loss_wrappers.pixel_loss'
+      path: 'rhino.loss.wrappers.pixel_loss'
       name: 'PixelLoss'
       params: {}
 
@@ -91,7 +91,7 @@ validation:
 # Data configuration
 data:
   path: trainer.data_modules.image_data_module
-  name: DistTrainSingleValidDataModule
+  name: DistTrainDistValidDataModule
   config: 
     train_dataloader:
       dataset:

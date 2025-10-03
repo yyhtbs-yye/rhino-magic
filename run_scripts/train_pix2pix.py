@@ -2,7 +2,7 @@ import types
 from trainer.rhino_ddp_train import main
 
 args_dict = {
-    'config': 'configs/generation/train_pix2pix_ffhq_256.yaml',
+    'config': 'configs/restoration/gan/train_pix2pix_ffhq_256.yaml',
     'resume_from': None,
 }
 

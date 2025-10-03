@@ -19,9 +19,9 @@ boat:
       name: 'PatchGANDiscriminator'
       params: {}
 
-  loss: 
+  losses: 
       net:
-        path: 'rhino.loss_wrappers.pixel_loss'
+        path: 'rhino.loss.wrappers.pixel_loss'
         name: 'PixelLoss'
         params: {}
       

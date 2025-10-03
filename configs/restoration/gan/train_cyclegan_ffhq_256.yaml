@@ -1,0 +1,137 @@
+_import: configs/base/train_base_gan.yaml
+
+boat:
+  path: 'rhino.boats.gan.cyclegan_boat'
+  name: 'CycleGanBoat'
+
+  net: 
+    path: 'rhino.baked_nn.gan.cyclegan.cyclegan_generator'
+    name: 'BiResnetGenerators'
+    params:
+      x_channels: 3
+      y_channels: 3
+      norm_cfg: 
+        type: 'IN'
+
+  critic:
+    path: 'rhino.baked_nn.gan.cyclegan.cyclegan_discrminator'
+    name: 'BiPatchDiscriminators'
+    params: 
+      y_channels: 3
+      x_channels: 3
+      norm_cfg: 
+        type: 'IN'
+
+  net_proc:
+    path: 'torch.nn'
+    name: 'UpsamplingBilinear2d'
+    params: 
+      scale_factor: 8
+
+  noise_generator: ~ 
+
+  loss:
+    critic:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+
+
+optimization: 
+  net:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0001
+      betas: [0.5, 0.990]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  critic:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0001
+      betas: [0.5, 0.99]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  use_ema:
+    ema_decay: 0.999
+    ema_start: $ema_start
+  
+  hyper_parameters:
+    adversarial_weight: 0.5
+    cycle_weight: 0.5
+    identity_weight: 0.1
+    
+data: 
+  path: trainer.data_modules.image_data_module
+  name: DistTrainDistValidDataModule
+  config: 
+    train_dataloader: 
+      dataset:
+        path: 'trainer.torch_datasets.unpaired_halves_image_dataset'
+        name: 'UnpairedHalvesImageDataset'
+        params: 
+          folder_paths: $train_folder_paths
+          data_prefix:
+            src: ''
+            tgt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [src, tgt]
+            - type: Normalize
+              keys: [src, tgt]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $train_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: false
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+    
+    valid_dataloader: 
+      dataset: 
+        path: 'trainer.torch_datasets.unpaired_halves_image_dataset'
+        name: 'UnpairedHalvesImageDataset'
+        params: 
+          folder_paths: $valid_folder_paths
+          data_prefix:
+            src: ''
+            tgt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [src, tgt]
+            - type: Normalize
+              keys: [src, tgt]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $valid_batch_size
+      num_workers: $num_workers
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+
+_vars:
+
+  devices: [0, 1, 2, 3]
+
+  train_batch_size: 32
+  valid_batch_size: 32
+  num_workers: 16
+
+  train_folder_paths:
+    src: data/ffhq/ffhq_imgs/ffhq_32
+    tgt: data/ffhq/ffhq_imgs/ffhq_256
+    
+  valid_folder_paths:
+    src: data/celeba/subsets/celeba_32
+    tgt: data/celeba/subsets/celeba_256
+
+  experiment_name: cyclegan_ffhq_256
+
+  ema_start: 10000

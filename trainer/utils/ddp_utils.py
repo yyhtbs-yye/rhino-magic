@@ -97,3 +97,5 @@ def move_to_device(batch, device):
         return batch.to(device, non_blocking=True)
     return batch
 
+def get_raw_module(m):
+    return m.module if isinstance(m, DDP) else m

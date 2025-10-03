@@ -5,7 +5,7 @@ def visualize_image_dict(
     images_dict,
     keys,
     global_step,
-    wnb=(0, 1),
+    wnb=(1.0, 0.0),
     prefix="val",
     max_images=4,
     texts=None,
@@ -17,7 +17,7 @@ def visualize_image_dict(
         images_dict: Dictionary with image tensors of shape [B, C, H, W]
         keys: List of lists, where each inner list contains keys to compare side by side
         global_step: Current global step for logging
-        wnb: Tuple for normalization: (multiplier, offset). Default: (0, 1)
+        wnb: Tuple for normalization: (multiplier, offset). Default: (1.0, 0.0)
         prefix: Prefix for the logged image names
         max_images: Maximum number of images to include from each batch
         texts: Optional list of text descriptions to include with images
@@ -34,6 +34,13 @@ def visualize_image_dict(
         # Normalize images if needed
         images_to_compare = []
         img = images_dict[key]
+
+        # if type is long, convert to float / 255
+        if img.dtype == torch.long or img.dtype == torch.int:
+            img = img.float() / 255.0
+            print("Warning: Image tensor converted from long/int to float and normalized to [0, 1] (override wnb).")
+            wnb = (1.0, 0.0)  # reset wnb if converting from int to float
+
         img = (img.clamp(-1, 1) * wnb[0]) + wnb[1]
         images_to_compare.append(img)
         

@@ -1,0 +1,117 @@
+_import: configs/base/train_base_gan.yaml
+
+boat:
+  path: 'rhino.boats.gan.pix2pix_boat'
+  name: 'Pix2PixBoat'
+
+  net: 
+    path: 'rhino.baked_nn.gan.pix2pix.pix2pix_generator'
+    name: 'UnetGenerator'
+    params:
+      in_channels: 6 # 3 for src image + 3 for noise
+      out_channels: 3
+      norm_cfg: 
+        type: 'GN'
+
+  critic:
+    path: 'rhino.baked_nn.gan.shared.patch_disc'
+    name: 'PatchDiscriminator'
+    params: 
+      in_channels: 6
+      norm_cfg: 
+        type: 'GN'
+  
+  net_proc:
+    path: 'torch.nn'
+    name: 'UpsamplingBilinear2d'
+    params: 
+      scale_factor: 8
+
+  noise_generator:
+    path: 'rhino.helpers.gan.noise_generator'
+    name: 'NoiseGenerator'
+    params: 
+      noise_size: [3, 256, 256]
+      random_state: 42
+  loss:
+    net:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+
+    critic:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+
+data: 
+  path: trainer.data_modules.image_data_module
+  name: DistTrainDistValidDataModule
+  config: 
+    train_dataloader: 
+      dataset:
+        path: 'trainer.torch_datasets.basic_image_dataset'
+        name: 'BasicImageDataset'
+        params: 
+          folder_paths: $train_folder_paths
+          data_prefix:
+            src: ''
+            tgt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [src, tgt]
+            - type: Normalize
+              keys: [src, tgt]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $train_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: false
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+    
+    valid_dataloader: 
+      dataset: 
+        path: 'trainer.torch_datasets.basic_image_dataset'
+        name: 'BasicImageDataset'
+        params: 
+          folder_paths: $valid_folder_paths
+          data_prefix:
+            src: ''
+            tgt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [src, tgt]
+            - type: Normalize
+              keys: [src, tgt]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $valid_batch_size
+      num_workers: $num_workers
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+
+
+_vars:
+
+  devices: [0, 1, 2, 3]
+
+  train_batch_size: 64
+  valid_batch_size: 64
+  num_workers: 16
+
+  train_folder_paths:
+    src: data/ffhq/ffhq_imgs/ffhq_32
+    tgt: data/ffhq/ffhq_imgs/ffhq_256
+    
+  valid_folder_paths:
+    src: data/celeba/subsets/celeba_32
+    tgt: data/celeba/subsets/celeba_256
+
+  experiment_name: pix2pix_ffhq_256
+
+  ema_start: 0

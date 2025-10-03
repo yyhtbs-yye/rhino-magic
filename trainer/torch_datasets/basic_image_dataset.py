@@ -13,6 +13,8 @@ class BasicImageDataset(Dataset):
         self.folder_paths = dataset_config.get('folder_paths', {})
         self.data_prefix = dataset_config.get('data_prefix', {})
         
+        self.max_dataset_size = dataset_config.get('max_dataset_size', None)
+
         # Now image_paths will be a dictionary instead of a list
         self.image_paths = self._scan_images()
 
@@ -20,6 +22,7 @@ class BasicImageDataset(Dataset):
         self.transform_pipeline = self._build_pipeline(pipeline_cfg)
         # Convert dictionary keys to a list to enable indexing
         self.image_keys = list(self.image_paths.keys())
+
 
     def _scan_images(self):
         """Scan images in all folders and return their intersection as a dictionary."""
@@ -66,12 +69,14 @@ class BasicImageDataset(Dataset):
         
         # Create a dictionary where keys are the base names and values are dictionaries of folder_paths
         result = {}
-        for base_name in common_base_names:
+        for i, base_name in enumerate(common_base_names):
             paths_dict = {}
             for key in self.folder_paths:
                 paths_dict[f"{key}_path"] = base_names_by_key[key][base_name]
+
             result[base_name] = paths_dict
-        
+            if self.max_dataset_size is not None and i + 1 >= self.max_dataset_size:
+                break
         print(f'Found {len(result)} common images across all folders')
         return result
 
@@ -94,6 +99,9 @@ class BasicImageDataset(Dataset):
         return transforms_list
         
     def __len__(self):
+        if self.max_dataset_size is not None:
+            return min(len(self.image_paths), self.max_dataset_size)
+        
         return len(self.image_paths)
         
     def __getitem__(self, idx):

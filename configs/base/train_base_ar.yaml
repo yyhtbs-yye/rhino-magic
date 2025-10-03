@@ -1,0 +1,20 @@
+boat:
+  path: ~
+  name: ~
+
+  net: ~
+  
+  losses: ~
+
+optimization: ~
+
+trainer: ~
+
+validation: ~
+
+# Data configuration
+data: ~
+
+logging: ~
+
+callbacks: ~

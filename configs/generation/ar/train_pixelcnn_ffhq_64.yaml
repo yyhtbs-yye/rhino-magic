@@ -1,0 +1,137 @@
+_import: configs/base/train_base_ar.yaml
+
+boat:
+  path: 'rhino.boats.autoregression.base_autoregression_boat'
+  name: 'BaseAutoregressionBoat'
+
+  sampler_config:
+    use_channel_ar: true   # make it explicit
+    num_steps: null        # let the model fill H*W*C
+
+  net:
+    path: 'rhino.nn.autoregression.pixelcnn.pixelcnn'
+    name: 'PixelCNN'
+    params:
+      vocab_size: 256
+      in_channels: $in_channels
+  
+  losses: 
+    net:
+      path: 'rhino.nn.losses.wrappers.pixel_loss'
+      name: 'PixelLoss'
+      params: 
+        base_loss_fn_str: ce
+
+optimization: 
+  net:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0003
+      betas: [0.9, 0.999]
+      weight_decay: 0.0
+    lr_scheduler: {}
+    
+  use_ema:
+    ema_decay: 0.999
+    ema_start: $ema_start
+
+trainer: 
+  devices: $devices
+  max_epochs: 100
+  val_check_epochs: 1
+  state_save_epochs: 1
+  visualization:
+    save_images: true
+    wnb: [0.0, 1.0]  # for visualization
+
+validation: 
+  save_images: true
+  num_vis_samples: 4
+  use_reference: true
+  target_metric_name: 'dummy_metric'
+  metrics:
+    dummy_metric:
+      path: 'rhino.metrics.dummy_metric'
+      name: 'DummyMetric'
+      params: {}
+
+# Data configuration
+data:
+  path: trainer.data_modules.image_data_module
+  name: DistTrainDistValidDataModule
+  config: 
+    train_dataloader:
+      dataset:
+        path: 'trainer.torch_datasets.basic_image_dataset'
+        name: 'BasicImageDataset'         # Name of the model class to use
+        params:
+          # max_dataset_size: 256
+          folder_paths: $train_folder_paths
+          data_prefix:
+            gt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [gt]
+              use_long: true
+      batch_size: $train_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+
+    # Validation dataloader configuration
+    valid_dataloader:
+      dataset:
+        path: 'trainer.torch_datasets.basic_image_dataset'           # Path to import the model class
+        name: 'BasicImageDataset'         # Name of the model class to use
+        params:
+          max_dataset_size: 32
+          folder_paths: $valid_folder_paths
+          data_prefix:
+            gt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [gt]
+              use_long: true
+      batch_size: $valid_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: false
+
+logging:
+  root_dir: work_dirs
+  experiment_name: $experiment_name
+  log_every_n_steps: 50
+
+callbacks: 
+  - path: trainer.callbacks.state_cleaner
+    name: KeepTopKStateCallback
+    params:
+      top_k: 5
+
+_vars:
+
+  devices: [0, 1, 2, 3]
+
+  train_batch_size: 64
+  valid_batch_size: 8
+  num_workers: 16
+
+  # vocab_size: 256
+  in_channels: 3
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_64
+    
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_64
+
+  experiment_name: pixelcnn_ffhq_64
+
+  ema_start: 1000

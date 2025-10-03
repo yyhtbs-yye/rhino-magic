@@ -5,7 +5,7 @@ boat:
   name: 'BaseDiffusionBoat'            
 
   latent_encoder:
-    path: 'rhino.nn_wrappers.autoencoder_kl_wrapper'   # Path to import the model class
+    path: 'rhino.nn.wrappers.autoencoder_kl_wrapper'   # Path to import the model class
     name: 'AutoencoderKLWrapper'              # Name of the model class to use
     pretrained: 'stabilityai/sd-vae-ft-mse'  # Example: A common pretrained VAE from Stable Diffusion
 

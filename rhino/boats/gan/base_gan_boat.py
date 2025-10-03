@@ -1,32 +1,26 @@
 import torch
-from contextlib import nullcontext
-
 from rhino.boats.base.base_boat import BaseBoat
 from trainer.utils.build_components import build_module
-from torch.nn.parallel import DistributedDataParallel as DDP
-
-def _raw(m):
-    return m.module if isinstance(m, DDP) else m
+from trainer.utils.ddp_utils import move_to_device
 
 class BaseGanBoat(BaseBoat):
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
-        super().__init__()
+    def __init__(self, config={}):
+        super().__init__(config=config)
         
-        assert boat_config is not None, "boat_config must be provided"
+        assert config is not None, "main config must be provided"
 
         # Build the model
         self.models['net'] = build_module(boat_config['net'])
         self.models['critic'] = build_module(boat_config['critic'])
 
-        # Store configurations
         self.boat_config = boat_config
         self.optimization_config = optimization_config or {}
         self.validation_config = validation_config or {}
 
-        self.concurrent = bool(self.optimization_config.get('concurrent', False))
-        self.g_interval = int(self.optimization_config.get('g_interval', 1))
-        self.d_interval = int(self.optimization_config.get('d_interval', 1))
-        self.adversarial_weight = float(self.optimization_config.get('adversarial_weight', 0.01))
+        self.concurrent = bool(optimization_config.get('hyper_parameters', {}).get('concurrent', False))
+        self.g_interval = int(optimization_config.get('hyper_parameters', {}).get('g_interval', 1))
+        self.d_interval = int(optimization_config.get('hyper_parameters', {}).get('d_interval', 1))
+        self.adversarial_weight = float(optimization_config.get('hyper_parameters', {}).get('adversarial_weight', 0.01))
 
         self.use_ema = self.optimization_config.get('use_ema', False)
         self.use_reference = validation_config.get('use_reference', False)
@@ -38,176 +32,135 @@ class BaseGanBoat(BaseBoat):
         else:
             self.ema_start = 0
 
-    def forward(self, x):
+    def predict(self, noise):
         
-        network_in_use = (
-            self.models['net_ema'] 
-            if self.use_ema and 'net_ema' in self.models 
-            else self.models['net']
-        )       
-        return network_in_use(x)
+        network_in_use = self.models['net_ema'] if self.use_ema and 'net_ema' in self.models else self.models['net']
 
-    def d_step(self, batch, **args): # start_new_accum, scaler, loss_scale, should_step_now):
+        return network_in_use(noise)
 
-        net_G = self.models['net']          # generator
-        net_D = self.models['critic']       # discriminator
-        d_opt = self.optimizers['critic']   # 
+    def d_step_calc_losses(self, batch):
 
-        x_real = batch['gt']
-
-        batch_size = x_real.shape[0]
-
-        z_noise = _raw(net_G).get_noise(batch_size, x_real.device)
-
-        # Zero grads only at the start of a new accumulation window
-        if args['start_new_accum']:
-            d_opt.zero_grad(set_to_none=True)
-
-        # Freeze G, enable D
-        net_G.requires_grad_(False)
-        net_D.requires_grad_(True)
+        gt = batch['gt']
+        batch_size = gt.size(0)
+        
+        # Initialize random noise in latent space
+        noise = self.noise_generator.next(batch_size, device=self.device)
 
         # Generate fake samples with current G (no grad to G)
         with torch.no_grad():
-            x_fake = net_G(z_noise)
+            x_fake = self.models['net'](noise)
 
         # Forward D on real & fake (under autocast if enabled)
-        with args['autocast_ctx']():
-            d_real, d_fake = net_D(x_real), net_D(x_fake)
-            d_loss = self.losses['critic'](d_real, d_fake) # GPT suggest remove "* self.adversarial_weight"
-
-        # Backward (scaled for accumulation)
-        if args['scaler'] is not None:
-            args['scaler'].scale(d_loss * args['loss_scale']).backward()
-        else:
-            (d_loss * args['loss_scale']).backward()
-
-        # Step D only at the end of the accumulation window
-        if args['should_step_now']:
-            if args['scaler'] is not None:
-                args['scaler'].step(d_opt)
-                args['scaler'].update()
-            else:
-                d_opt.step()
+        d_real, d_fake = self.models['critic'](gt), self.models['critic'](x_fake)
+        # GPT suggest remove "* self.adversarial_weight"
+        d_loss = self.losses['critic'](d_real, d_fake) 
 
         return d_loss
 
-    def g_step(self, batch, **args):
+    def g_step_calc_losses(self, batch):
 
-        net_G = self.models['net']            # generator
-        net_D = self.models['critic']     # discriminator
-        g_opt = self.optimizers['net']
+        gt = batch['gt']
+        batch_size = gt.size(0)
+        
+        # Initialize random noise in latent space
+        noise = self.noise_generator.next(batch_size, device=self.device)
 
-        x_real = batch['gt']
-
-        batch_size = x_real.shape[0]
-
-        if args['start_new_accum']:
-            g_opt.zero_grad(set_to_none=True)
-
-        # Enable G, freeze D so G doesn't update D
-        net_G.requires_grad_(True)
-        net_D.requires_grad_(False)
-
-        z_noise = _raw(net_G).get_noise(batch_size, x_real.device)
-
-        # Recompute fakes WITH grad through G
-        with args['autocast_ctx']():
-            x_fake = net_G(z_noise)
-            d_fake_for_g = net_D(x_fake)
-            # Convention: loss_fn(pred_fake, None) gives G's adv loss (hinge/BCE etc.)
-            g_loss = self.losses['critic'](d_fake_for_g, None) * self.adversarial_weight
-
-        # Backward (scaled for accumulation)
-        if args['scaler'] is not None:
-            args['scaler'].scale(g_loss * args['loss_scale']).backward()
-        else:
-            (g_loss * args['loss_scale']).backward()
-
-        # Step G only at the end of the accumulation window
-        if args['should_step_now']:
-            if args['scaler'] is not None:
-                args['scaler'].step(g_opt)
-                args['scaler'].update()
-            else:
-                g_opt.step()
+        # Generate fake samples with current G (no grad to G)
+        x_fake = self.models['net'](noise)
+        
+        # Forward G on fake
+        d_fake_for_g = self.models['critic'](x_fake)
+        g_loss = self.losses['critic'](d_fake_for_g, None) * self.adversarial_weight
 
         return g_loss
 
-    def end_step(self):
-        net_G = self.models['net']            # generator
-        net_D = self.models['critic']     # discriminator
-        g_opt = self.optimizers['net']
-        d_opt = self.optimizers['critic']
-        if g_opt is None or d_opt is None:
-            raise RuntimeError("Expected 'net' (G) and 'critic' (D) optimizers in self.optimizers.")
-        # Restore grads by default
-        net_G.requires_grad_(True)
-        net_D.requires_grad_(True)
+    def d_step(self, batch, scaler): # start_new_accum, scaler, loss_scale, should_step_now):
 
-    def training_step(self, batch, batch_idx, epoch, *, 
-                      scaler=None, accumulate=1, microstep=0,):
+        micro_batches = self._split_batch(batch, self.total_micro_steps)
+
+        # Enable G, freeze D so G doesn't update D
+        self.models['net'].requires_grad_(False)
+        self.models['critic'].requires_grad_(True)
+
+        self._zero_grad(['critic'], set_to_none=True)
+
+        micro_losses_list = []
+        for current_micro_step, micro_batch in enumerate(micro_batches):
+            micro_batch = move_to_device(micro_batch, self.device)
+            micro_d_loss = self.d_step_calc_losses(micro_batch)
+            micro_target_loss = micro_d_loss / self.total_micro_steps
+            micro_losses_list.append({'d_loss': micro_d_loss})
+            self.training_backpropagation(micro_target_loss, current_micro_step, scaler)
+
+        self.training_gradient_descent(scaler, ['critic'])
+
+        return self._aggregate_loss_dicts(micro_losses_list)
+    
+    def g_step(self, batch, scaler):
+
+        micro_batches = self._split_batch(batch, self.total_micro_steps)
+
+        # Enable G, freeze D so G doesn't update D
+        self.models['net'].requires_grad_(True)
+        self.models['critic'].requires_grad_(False)
+
+        self._zero_grad(['net'], set_to_none=True)
+
+        micro_losses_list = []
+        for current_micro_step, micro_batch in enumerate(micro_batches):
+            micro_batch = move_to_device(micro_batch, self.device)
+            micro_g_loss = self.g_step_calc_losses(micro_batch)
+            micro_target_loss = micro_g_loss / self.total_micro_steps
+            micro_losses_list.append({'g_loss': micro_g_loss})
+            self.training_backpropagation(micro_target_loss, current_micro_step, scaler)
+
+        self.training_gradient_descent(scaler, ['net'])
+
+        return self._aggregate_loss_dicts(micro_losses_list)
+
+    def training_step(self, batch, batch_idx, epoch, *, scaler=None):
+
+        self.epoch = epoch
 
         # Schedules
         do_g = (self.g_interval > 0) and (batch_idx % self.g_interval == 0)
         do_d = (self.d_interval > 0) and (batch_idx % self.d_interval == 0)
 
-        # Accumulation controls
-        start_new_accum = (microstep % accumulate == 0)
-        should_step_now = ((microstep + 1) % accumulate == 0)
-        loss_scale = 1.0 / float(accumulate)
-
-        # AMP context if scaler is provided
-        autocast_ctx = torch.cuda.amp.autocast if scaler is not None else nullcontext
-
-        g_loss, d_loss = None, None
-
+        losses = {}
         if do_d:
-            d_loss = self.d_step(batch, start_new_accum=start_new_accum, scaler=scaler, loss_scale=loss_scale, should_step_now=should_step_now,
-                                 autocast_ctx=autocast_ctx)
+            d_loss_dict = self.d_step(batch, scaler)
 
         if do_g:
-            g_loss = self.g_step(batch, start_new_accum=start_new_accum, scaler=scaler, loss_scale=loss_scale, should_step_now=should_step_now,
-                                 autocast_ctx=autocast_ctx)
+            g_loss_dict = self.g_step(batch, scaler)
 
-            # Optional EMA just after a real G step
-            if getattr(self, 'use_ema', False) and self.get_global_step() >= getattr(self, 'ema_start', 0):
-                self._update_ema()
+        losses.update(d_loss_dict)
+        losses.update(g_loss_dict)
+        losses['total_loss'] = d_loss_dict.get('d_loss', 0.0) + g_loss_dict.get('g_loss', 0.0)
 
-        self.end_step()
+        self.models['net'].requires_grad_(True)
+        self.models['critic'].requires_grad_(True)
 
-        total_loss = None
-        if g_loss is not None and d_loss is not None:
-            total_loss = g_loss + d_loss
-        elif g_loss is not None:
-            total_loss = g_loss
-        elif d_loss is not None:
-            total_loss = d_loss
-        else:
-            raise RuntimeError("No generator or discriminator loss was computed in training_step.")
+        self._update_ema()
 
-        return {
-            "total_loss": total_loss,
-            "g_loss": g_loss,
-            "d_loss": d_loss,
-            "did_step": should_step_now,
-        }
+        self.training_lr_scheduling_step(active_keys=['net', 'critic'])
+
+        return losses
 
     def validation_step(self, batch, batch_idx):
 
-        x_real = batch['gt']
+        batch = move_to_device(batch, self.device)
 
-        batch_size = x_real.shape[0]
+        gt = batch['gt']
 
-        net_G = self.models['net']
+        batch_size = gt.shape[0]
 
         with torch.no_grad():
 
-            z_noise = _raw(net_G).get_noise(batch_size, x_real.device)
+            noise = self.noise_generator.next(batch_size, device=self.device)
 
-            x_fake = self.forward(z_noise)
+            x_fake = self.predict(noise)
 
-            valid_output = {'preds': x_fake, 'targets': x_real}
+            valid_output = {'preds': x_fake, 'targets': gt}
 
             # Reset Metric in the begining iter in an epoch
             if batch_idx == 0:
@@ -215,12 +168,9 @@ class BaseGanBoat(BaseBoat):
 
             metrics = self._calc_metrics(valid_output)
 
-            named_imgs = {'groundtruth': x_real, 'generated': x_fake,}
+            named_imgs = {'groundtruth': gt, 'generated': x_fake,}
 
         return metrics, named_imgs
 
-    def training_calc_losses(self, batch, batch_idx, ): pass
-
-    def training_backpropagation(self, losses, batch_idx, accumulate, scaler): pass
-
-    def training_gradient_descent(self, batch_idx): pass
+    def build_others(self):
+        self.noise_generator = build_module(self.boat_config.get('noise_generator', None))

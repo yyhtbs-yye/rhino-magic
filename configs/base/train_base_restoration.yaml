@@ -5,7 +5,7 @@ boat:
   net: $net
 
 <<<<<<< HEAD:configs/base/train_base_restoration.yaml
-  loss: $loss
+  losses: $loss
 =======
   loss:
     net:
@@ -52,7 +52,7 @@ validation:
 
 data: 
   path: trainer.data_modules.image_data_module
-  name: DistTrainSingleValidDataModule
+  name: DistTrainDistValidDataModule
   config: 
     train_dataloader: 
       dataset:

@@ -93,7 +93,7 @@ validation:
 
 data: 
   path: trainer.data_modules.image_data_module
-  name: DistTrainSingleValidDataModule
+  name: DistTrainDistValidDataModule
   config: 
     train_dataloader: 
       dataset:

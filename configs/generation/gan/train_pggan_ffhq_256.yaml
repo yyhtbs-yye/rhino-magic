@@ -1,0 +1,106 @@
+_import: configs/base/train_base_gan.yaml
+
+boat:
+  path: 'rhino.boats.gan.pggan_boat'
+  name: 'PgGanBoat'
+
+  # Progressive schedule (epoch-based). End resolution must match out_scale/in_scale.
+  progressive:
+    stages: # The fade-in should be about 30-50% of the stable training time.
+      # Otherwise, you can get visible seams/ghosting effects at the boundaries.
+      - {res: 4,   start_epoch: 0,  fade_epochs: 0}
+      - {res: 8,   start_epoch: 30,  fade_epochs: 15}
+      - {res: 16,  start_epoch: 60,  fade_epochs: 15}
+      - {res: 32,  start_epoch: 90,  fade_epochs: 15}
+      - {res: 64,  start_epoch: 120, fade_epochs: 15}
+      - {res: 128, start_epoch: 150, fade_epochs: 15}
+      - {res: 256, start_epoch: 180, fade_epochs: 15}
+
+    # If you prefer kimg pacing, comment out "stages" above and use:
+    # resolutions: [4, 8, 16, 32, 64, 128, 256]
+    # fade_kimg: 600
+    # stable_kimg: 600
+    # start_stage_idx: 0
+    # max_stage_idx: 6
+
+  net:
+    path: 'rhino.baked_nn.gan.pggan.pggan_generator'
+    name: 'PGGANGenerator'
+    params:
+      noise_size: 128        # must match your noise_generator.next(...).shape[1]
+      out_scale: 256        # final output resolution (must match last progressive stage)
+      # below are optional, shown with ProGAN-ish defaults
+      base_channels: 8192
+      channel_decay: 1.0
+      max_channels: 512
+      fused_upconv: true
+
+
+  critic:
+    path: 'rhino.baked_nn.gan.pggan.pggan_discriminator'
+    name: 'PGGANDiscriminator'
+    params:
+      in_scale: 256         # final input resolution (must match last progressive stage)
+      base_channels: 8192
+      max_channels: 512
+      in_channels: 3
+      channel_decay: 1.0
+      fused_convdown: true
+
+  noise_generator:
+    path: 'rhino.helpers.gan.noise_generator'
+    name: 'NoiseGenerator'
+    params: 
+      noise_size: 128
+      random_state: 42
+
+  loss:
+    net:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+    critic:
+      path: 'rhino.nn.losses.gan_losses'
+      name: 'HingeGANLoss'
+      params: {}
+
+optimization:
+  net:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.001
+      betas: [0.0, 0.99]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  critic:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.001
+      betas: [0.0, 0.99]
+      weight_decay: 0.0
+    lr_scheduler: {}
+
+  use_ema:
+    ema_decay: 0.999
+    ema_start: $ema_start
+
+_vars:
+
+  devices: [0, 1, 2, 3]
+
+  train_batch_size: 128
+  valid_batch_size: 32
+  num_workers: 16
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_256
+
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_256
+
+  experiment_name: pggan_ffhq_256
+  ema_start: 0
+  max_epochs: 200

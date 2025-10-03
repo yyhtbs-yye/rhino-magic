@@ -34,15 +34,15 @@ class KeepTopKStateCallback(Callback):
 
 
 def get_non_top_k_state_paths(records, k=3):
-    # Create a list of tuples (avg_loss, state_path)
+    # Create a list of tuples (target_metric, state_path)
     records_list = []
     for i in records:
         record = records[i]
-        avg_loss = record['avg_loss']
+        target_metric = record['target_metric']
         state_path = record['state_path']  # PosixPath
-        records_list.append((avg_loss, str(state_path)))
+        records_list.append((target_metric, str(state_path)))
     
-    # Sort by avg_loss (lower is better)
+    # Sort by target_metric (lower is better)
     records_list.sort(key=lambda x: x[0])
     
     # Keep top k, return paths of the rest to be deleted

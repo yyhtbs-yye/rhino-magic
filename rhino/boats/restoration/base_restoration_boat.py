@@ -5,10 +5,10 @@ from trainer.utils.build_components import build_module
 from trainer.utils.ddp_utils import move_to_device
 
 class BaseRestorationBoat(BaseBoat):
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
-        super().__init__(boat_config, optimization_config, validation_config)
+    def __init__(self, config={}):
+        super().__init__(config=config)
         
-        assert boat_config is not None, "boat_config must be provided"
+        assert config is not None, "main config must be provided"
 
         # Build the model
         self.models['net'] = build_module(boat_config['net'])
@@ -34,7 +34,7 @@ class BaseRestorationBoat(BaseBoat):
         
         return restored
 
-    def training_calc_losses(self, batch, batch_idx):
+    def training_calc_losses(self, batch):
 
         gt = batch['gt']
         lq = batch['lq']

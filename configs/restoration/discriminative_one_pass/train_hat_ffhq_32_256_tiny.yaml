@@ -3,7 +3,7 @@ _import: configs/base/train_base_disc.yaml
 _vars:
 
   net:
-      path: 'rhino.nn.baked.sisr.hat.hat'
+      path: 'rhino.baked_nn.sisr.hat.hat'
       name: 'HAT'
       params: 
         upscale: 8
@@ -14,9 +14,9 @@ _vars:
         window_size: 16
         upsampler: 'pixelshuffle'
 
-  loss: 
+  losses: 
       net:
-      path: 'rhino.loss_wrappers.pixel_loss'
+      path: 'rhino.loss.wrappers.pixel_loss'
       name: 'PixelLoss'
       params: {}
 

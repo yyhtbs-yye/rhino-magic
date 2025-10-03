@@ -9,7 +9,7 @@ class TemplateBoat(ABC):
     """
 
     @abstractmethod
-    def __init__(self):
+    def __init__(self, config):
         pass
 
     @abstractmethod
@@ -40,7 +40,6 @@ class TemplateBoat(ABC):
     def validation_step(self, batch, batch_idx):
         pass
 
-    
     @abstractmethod
     def save_state(self, run_folder, prefix, global_step, epoch):
         pass
@@ -101,9 +100,9 @@ class TemplateBoat(ABC):
     def log_valid_metrics(self, logger, metrics):
         pass
 
-    @abstractmethod
-    def training_calc_losses(self, batch, batch_idx):
-        pass
+    # @abstractmethod
+    # def training_calc_losses(self, batch):
+    #     pass
 
     @abstractmethod
     def _zero_grad(self, active_keys):
@@ -114,7 +113,7 @@ class TemplateBoat(ABC):
         pass
 
     @abstractmethod
-    def visualize_validation(self, logger, named_imgs, batch_idx, num_vis_samples, first_batch_only, texts):
+    def visualize_validation(self, logger, named_imgs, batch_idx, trainer_config):
         pass
         
     @abstractmethod
@@ -126,7 +125,7 @@ class TemplateBoat(ABC):
         pass
 
     @abstractmethod
-    def build_lr_schedulers(self):
+    def build_lr_scheduler_by_name(self, model_name):
         pass
 
     @abstractmethod

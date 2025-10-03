@@ -7,8 +7,8 @@ from trainer.utils.ddp_utils import move_to_device
 
 class LatentDiffusionBoat(BaseDiffusionBoat):
 
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
-        super().__init__(boat_config, optimization_config, validation_config)
+    def __init__(self, config={}):
+        super().__init__(config=config)
 
         self.models['latent_encoder'] = build_module(boat_config['latent_encoder']) if 'latent_encoder' in boat_config else None
         
@@ -28,7 +28,7 @@ class LatentDiffusionBoat(BaseDiffusionBoat):
         
         return result
         
-    def training_calc_losses(self, batch, batch_idx):
+    def training_calc_losses(self, batch):
 
         gt = batch['gt']
 
@@ -69,7 +69,6 @@ class LatentDiffusionBoat(BaseDiffusionBoat):
         batch = move_to_device(batch, self.device)
 
         gt = batch['gt']
-        c = batch.get('cond', None)
 
         with torch.no_grad():
 
@@ -80,16 +79,13 @@ class LatentDiffusionBoat(BaseDiffusionBoat):
 
             noise = torch.randn_like(latent)
 
-            x0_hat = self.predict(noise, c)
+            x0_hat = self.predict(noise)
 
             valid_output = {'preds': x0_hat, 'targets': gt,}
 
             metrics = self._calc_metrics(valid_output)
 
             named_imgs = {'groundtruth': gt, 'generated': x0_hat,}
-
-            if c is not None and self.image_as_condition:
-                named_imgs['condition'] = c
 
         return metrics, named_imgs
     

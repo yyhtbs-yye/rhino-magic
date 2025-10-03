@@ -6,6 +6,8 @@ boat:
 
   critic: $critic
   
+  noise_generator: $noise_generator
+
   loss:
     net:
       path: 'rhino.nn.losses.gan_losses'
@@ -43,7 +45,7 @@ optimization:
 
 trainer: 
   devices: $devices
-  max_epochs: 100
+  max_epochs: $max_epochs
   val_check_epochs: 1
   state_save_epochs: 1
   save_images: true
@@ -70,7 +72,7 @@ validation:
 
 data: 
   path: trainer.data_modules.image_data_module
-  name: DistTrainSingleValidDataModule
+  name: DistTrainDistValidDataModule
   config: 
     train_dataloader: 
       dataset:

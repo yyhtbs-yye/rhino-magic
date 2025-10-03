@@ -51,3 +51,7 @@ def build_lr_scheduler(optimizer, config):
 def build_dataset(config):
     
     return build_module(config)
+
+def build_logger(config):
+    
+    return build_module(config)

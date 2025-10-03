@@ -1,26 +1,33 @@
 import torch
 
-from trainer.utils.state_load_save import save_state, load_state
-from trainer.utils.build_components import build_module, build_modules, build_optimizer, build_lr_scheduler
-from trainer.visualizers.basic_visualizer import visualize_image_dict
-
 from copy import deepcopy
 
 from rhino.boats.base.template_boat import TemplateBoat
 
+from trainer.utils.state_load_save import save_state, load_state
+from trainer.utils.build_components import build_module, build_modules, build_optimizer, build_lr_scheduler, build_logger
+from trainer.visualizers.basic_visualizer import visualize_image_dict
 from trainer.utils.ddp_utils import ddp_no_sync_all, move_to_device
 
 class BaseBoat(TemplateBoat):
 
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
+    def __init__(self, config={}):
 
-        self.total_micro_steps = optimization_config.pop('total_micro_steps', 1)
-        self.target_loss_key = optimization_config.pop('target_loss_key', 'total_loss')
-        self.models = {}
-        self.optimizers = {}
-        self.losses = {}
-        self.metrics = {}
-        self.lr_schedulers = {}
+        self.boat_config = config.get('boat') or {}
+        self.optimization_config = config.get('optimization') or {}
+        self.validation_config = config.get('validation') or {}
+        self.logging_config = config.get('logging', {})
+
+        self.total_micro_steps = self.optimization_config.pop('total_micro_steps', 1)
+        self.target_loss_key = self.optimization_config.pop('target_loss_key', 'total_loss')
+
+        self.build_models()
+        self.build_losses()
+        self.build_optimizers()
+        self.build_metrics()
+        self.build_others()
+        self.build_loggers()
+
     def to(self, device):
         """
         Move all models and metrics to the specified device.
@@ -93,9 +100,11 @@ class BaseBoat(TemplateBoat):
         else:
             for k in active_keys: self.optimizers[k].step()
 
-    def training_lr_scheduling_step(self):
-        for _, scheduler in self.lr_schedulers.items(): # _: scheduler_name
-            scheduler.step()
+    def training_lr_scheduling_step(self, active_keys):
+
+        for k in active_keys: 
+            if k in self.lr_schedulers:
+                self.lr_schedulers[k].step()
             
     def training_step(self, batch, batch_idx, epoch, *, scaler=None):
         
@@ -108,7 +117,7 @@ class BaseBoat(TemplateBoat):
         micro_losses_list = []
         for current_micro_step, micro_batch in enumerate(micro_batches):
             micro_batch = move_to_device(micro_batch, self.device)
-            micro_losses = self.training_calc_losses(micro_batch, batch_idx)
+            micro_losses = self.training_calc_losses(micro_batch)
             micro_target_loss = micro_losses[self.target_loss_key] / self.total_micro_steps
             micro_losses_list.append(micro_losses)
             self.training_backpropagation(micro_target_loss, current_micro_step, scaler)
@@ -117,31 +126,37 @@ class BaseBoat(TemplateBoat):
         
         self._update_ema()
 
-        self.training_lr_scheduling_step()
+        self.training_lr_scheduling_step(active_keys)
 
         return self._aggregate_loss_dicts(micro_losses_list)
 
     # ------------------------------------ Visualization ---------------------------------------------
 
-    def visualize_validation(self, logger, named_imgs, batch_idx, num_vis_samples=4, first_batch_only=True, texts=None):
+    def visualize_validation(self, logger, named_imgs, batch_idx, trainer_config):
 
-        """Visualize validation results."""
-        if first_batch_only and batch_idx == 0:
-            # Limit the number of samples to visualize
-            for key in named_imgs.keys():
-                if named_imgs[key].shape[0] > num_vis_samples:
-                    named_imgs[key] = named_imgs[key][:num_vis_samples]
-            
-            # Log visualizations to the experiment tracker
-            visualize_image_dict(
-                logger=logger,
-                images_dict=named_imgs,
-                keys=list(named_imgs.keys()),
-                global_step=self.get_global_step(),
-                wnb=(0.5, 0.5),
-                prefix='val',
-                texts=texts,
-            )
+        visualization_config = trainer_config.get('visualization', {})
+
+        # Backward compatibility
+        if visualization_config.get('save_images', False) or trainer_config.get('save_images', False):
+
+            """Visualize validation results."""
+            if visualization_config.get('first_batch_only', True) and batch_idx == 0:
+                # Limit the number of samples to visualize
+                for key in named_imgs.keys():
+                    if named_imgs[key].shape[0] > visualization_config.get('num_vis_samples', 4):
+                        named_imgs[key] = named_imgs[key][:visualization_config.get('num_vis_samples')]
+                
+                wnb = visualization_config.get('wnb', (0.5, 0.5))
+                # Log visualizations to the experiment tracker
+                visualize_image_dict(
+                    logger=logger,
+                    images_dict=named_imgs,
+                    keys=list(named_imgs.keys()),
+                    global_step=self.get_global_step(),
+                    wnb=wnb,
+                    prefix='val',
+                    texts='texts',
+                )
 
     # ------------------------------------ Result Logging ---------------------------------------------
 
@@ -171,28 +186,45 @@ class BaseBoat(TemplateBoat):
         self.global_step = global_step
 
     # ------------------------------------ Build Component ---------------------------------------------
-    def build_losses(self):
-        for loss_name in self.boat_config.get('loss', {}):
-            self.losses[loss_name] = build_module(self.boat_config['loss'][loss_name])         
+    def build_models(self):
+        for model_name in self.boat_config.get('models', {}):
+            new_module = build_module(self.boat_config['models'][model_name])
+            if self.models.get(model_name) is None or type(new_module) != type(self.models[model_name]):
+                self.models[model_name] = new_module
 
+    def build_losses(self):
+        for loss_name in self.boat_config.get('losses', {}):
+            new_module = build_module(self.boat_config['losses'][loss_name])
+            if self.losses.get(loss_name) is None or type(new_module) != type(self.losses[loss_name]):
+                self.losses[loss_name] = new_module
+                
     def build_metrics(self):
         self.metrics = build_modules(self.validation_config.get('metrics', {}))
 
     def build_optimizers(self):
         for model_name in self.optimization_config:
-            if 'use_ema' in model_name:
+            if 'use_ema' in model_name or model_name == 'hyper_parameters':
                 continue
-            self.optimizers[model_name] = build_optimizer(
+            new_optimizer = build_optimizer(
                 self.models[model_name].parameters(), 
                 self.optimization_config[model_name]
             )
-        self.build_lr_schedulers()
+            if self.optimizers.get(model_name) is None or type(new_optimizer) != type(self.optimizers[model_name]):
+                self.optimizers[model_name] = new_optimizer
 
-    def build_lr_schedulers(self):
+        self.build_lr_scheduler_by_name(model_name)
 
-        if 'lr_scheduler' in self.optimization_config['net'] and len(self.optimization_config['net'].get('lr_scheduler', {})) > 0:
-            self.lr_schedulers['net'] = build_lr_scheduler(self.optimizers['net'], 
-                                                            self.optimization_config['net'].get('lr_scheduler', {}))
+    def build_lr_scheduler_by_name(self, model_name):
+
+        if 'lr_scheduler' in self.optimization_config[model_name] and len(self.optimization_config[model_name].get('lr_scheduler', {})) > 0:
+            new_lr_schelduler = build_lr_scheduler(self.optimizers[model_name], self.optimization_config[model_name].get('lr_scheduler', {}))
+            if self.lr_schedulers.get(model_name) is None or type(new_lr_schelduler) != type(self.lr_schedulers[model_name]):
+                self.lr_schedulers[model_name] = new_lr_schelduler
+    
+    def build_loggers(self):
+        self.loggers = {}
+        for logger_name in self.logging_config:
+            self.loggers[logger_name] = build_logger(self.logging_config[logger_name])
 
     # ------------------------------------ EMA ---------------------------------------------
     def _setup_ema(self):
@@ -219,7 +251,6 @@ class BaseBoat(TemplateBoat):
                 ema_param.data.mul_(self.ema_decay).add_(param.data, alpha=1 - self.ema_decay)
             for ema_buffer, buffer in zip(self.models['net_ema'].buffers(), self.models['net'].buffers()):
                 ema_buffer.data.copy_(buffer.data)
-
 
     # ------------------------------------ State S/L ---------------------------------------------
     def save_state(self, run_folder, prefix="boat_state", global_step=None, epoch=None):
@@ -339,3 +370,6 @@ class BaseBoat(TemplateBoat):
                 out[k] = sum(vals) / len(vals)
 
         return out
+
+    def build_others(self):
+        pass
