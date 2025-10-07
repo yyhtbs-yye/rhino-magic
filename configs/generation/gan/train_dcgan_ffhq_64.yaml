@@ -1,6 +1,6 @@
 _import: configs/base/train_base_gan.yaml
 
-loss:
+losses:
   net:
     path: 'rhino.nn.losses.gan_losses'
     name: 'BCEGANLoss'
@@ -10,7 +10,6 @@ loss:
     path: 'rhino.nn.losses.gan_losses'
     name: 'BCEGANLoss'
     params: {}
-    
 
 optimization: 
   net:

@@ -1,19 +1,17 @@
-_import: configs/base/train_base_ar.yaml
+_import: configs/base/train_base.yaml
 
 boat:
-  path: 'rhino.boats.autoregression.base_autoregression_boat'
-  name: 'BaseAutoregressionBoat'
+  _target_: 'rhino.boats.autoregression.base_autoregression_boat.BaseAutoregressionBoat'
 
-  sampler_config:
-    use_channel_ar: true   # make it explicit
-    num_steps: null        # let the model fill H*W*C
-
-  net:
-    path: 'rhino.nn.autoregression.pixelcnn.pixelcnn'
-    name: 'PixelCNN'
-    params:
-      vocab_size: 256
-      in_channels: $in_channels
+  models:
+    net:
+      path: 'rhino.nn.autoregression.pixelcnn.pixelcnn'
+      name: 'PixelCNN'
+      params:
+        vocab_size: 256
+        kernel_size: $kernel_size
+        in_channels: $in_channels
+        hidden_channels: $hidden_channels
   
   losses: 
     net:
@@ -27,7 +25,7 @@ optimization:
     path: 'torch.optim'
     name: 'Adam'
     params:
-      lr: 0.0003
+      lr: 0.0001
       betas: [0.9, 0.999]
       weight_decay: 0.0
     lr_scheduler: {}
@@ -36,9 +34,20 @@ optimization:
     ema_decay: 0.999
     ema_start: $ema_start
 
+logging:
+  root_dir: 'work_dirs'
+  name: $experiment_name
+  loggers:
+    tensorboard:
+      path: 'trainer.loggers.tensorboard'
+      name: 'TensorBoardLogger'
+      params:
+        log_dir: 'work_dirs'
+        name: $experiment_name
+
 trainer: 
   devices: $devices
-  max_epochs: 100
+  max_epochs: 200
   val_check_epochs: 1
   state_save_epochs: 1
   visualization:
@@ -102,12 +111,8 @@ data:
       persistent_workers: true
       sampler:
         type: DefaultSampler
-        shuffle: false
+        shuffle: true
 
-logging:
-  root_dir: work_dirs
-  experiment_name: $experiment_name
-  log_every_n_steps: 50
 
 callbacks: 
   - path: trainer.callbacks.state_cleaner
@@ -117,7 +122,7 @@ callbacks:
 
 _vars:
 
-  devices: [0, 1, 2, 3]
+  devices: [0, 1, 4, 5]
 
   train_batch_size: 64
   valid_batch_size: 8
@@ -125,13 +130,15 @@ _vars:
 
   # vocab_size: 256
   in_channels: 3
+  kernel_size: 9
+  hidden_channels: 96
 
   train_folder_paths:
-    gt: data/ffhq/ffhq_imgs/ffhq_64
+    gt: data/ffhq/ffhq_imgs/ffhq_128
     
   valid_folder_paths:
-    gt: data/celeba/subsets/celeba_64
+    gt: data/celeba/subsets/celeba_128
 
-  experiment_name: pixelcnn_ffhq_64
+  experiment_name: pixelcnn_ffhq_128
 
-  ema_start: 1000
+  ema_start: 0

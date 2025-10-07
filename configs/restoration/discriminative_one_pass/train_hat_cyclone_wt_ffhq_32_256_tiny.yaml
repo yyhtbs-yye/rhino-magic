@@ -14,7 +14,7 @@ _vars:
 
   losses: 
       net:
-        path: 'rhino.loss.wrappers.wavelet.pixel_loss_wt'
+        path: 'rhino.nn.losses.wrappers.wavelet.pixel_loss_wt'
         name: 'PixelLossWT'
         params: 
           level: 3

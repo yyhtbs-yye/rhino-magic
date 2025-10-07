@@ -31,7 +31,7 @@ def _sample_noise_for_G(net_G, batch_size, device: torch.device) -> torch.Tensor
     )
 
 class RegularizedGanBoat(BaseBoat):
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
+    def __init__(self, config={}):
         super().__init__()
         
         assert config is not None, "main config must be provided"

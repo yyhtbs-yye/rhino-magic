@@ -4,15 +4,16 @@ boat:
   path: 'rhino.boats.diffusions.base_diffusion_boat'
   name: 'BaseDiffusionBoat'            
 
-  latent_encoder:
-    path: 'rhino.nn.wrappers.autoencoder_kl_wrapper'   # Path to import the model class
-    name: 'AutoencoderKLWrapper'              # Name of the model class to use
-    pretrained: 'stabilityai/sd-vae-ft-mse'  # Example: A common pretrained VAE from Stable Diffusion
+  models:
+    latent_encoder:
+      path: 'rhino.nn.wrappers.autoencoder_kl_wrapper'   # Path to import the model class
+      name: 'AutoencoderKLWrapper'              # Name of the model class to use
+      pretrained: 'stabilityai/sd-vae-ft-mse'  # Example: A common pretrained VAE from Stable Diffusion
 
-  context_encoder:
-    path: torch.nn
-    name: Identity
-    params: {}
+    context_encoder:
+      path: torch.nn
+      name: Identity
+      params: {}
 
 _vars:
 

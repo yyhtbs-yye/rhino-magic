@@ -15,7 +15,7 @@ class PgGanBoat(BaseGanBoat):
     def __init__(self, config={}):
         super().__init__(config=config)
 
-        pg_cfg: Dict = (boat_config or {}).get('progressive', {}) or {}
+        pg_cfg: Dict = (config['boat'] or {}).get('progressive', {}) or {}
 
         # Prefer explicit epoch-based 'stages' if provided
         self._epoch_schedule: Optional[_EpochSchedule] = None

@@ -85,11 +85,11 @@ class TemplateBoat(ABC):
         pass
 
     @abstractmethod
-    def _log_metrics(self, logger, results, prefix):
+    def _log_values(self, logger, results, prefix):
         pass
 
     @abstractmethod
-    def _log_metric(self, logger, result, metric_name, prefix):
+    def _log_value(self, logger, result, metric_name, prefix):
         pass
 
     @abstractmethod

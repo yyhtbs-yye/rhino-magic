@@ -4,19 +4,6 @@ import torch.nn.functional as F
 from rhino.boats.gan.base_gan_boat import BaseGanBoat
 
 class InfoGanBoat(BaseGanBoat):
-    """
-    Clear, fully functional InfoGAN boat.
-    Assumes:
-      - Generator: net(z, c_cat=None, c_cont=None)
-      - Critic: critic(x) -> {
-            'adv': Tensor,
-            'q_cat_logits': Tensor (N, cat_dim)        [if cat_dim > 0],
-            'q_cont_mu': Tensor (N, cont_dim),         [if cont_dim > 0]
-            'q_cont_logvar': Tensor (N, cont_dim)      [if cont_dim > 0]
-        }
-      - Shapes/dims are correct.
-      - Uses BaseGanBoat loops (EMA, micro-batching, schedulers).
-    """
 
     def __init__(self, config={}):
         super().__init__(config=config)

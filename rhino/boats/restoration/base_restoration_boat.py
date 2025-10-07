@@ -10,13 +10,10 @@ class BaseRestorationBoat(BaseBoat):
         
         assert config is not None, "main config must be provided"
 
-        # Build the model
-        self.models['net'] = build_module(boat_config['net'])
-        
         # Store configurations
-        self.boat_config = boat_config
-        self.optimization_config = optimization_config or {}
-        self.validation_config = validation_config or {}
+        self.boat_config = config.get('boat', {})
+        self.optimization_config = config.get('optimization', {})
+        self.validation_config = config.get('validation', {})
 
         self.use_ema = self.optimization_config.get('use_ema', False)
         self.use_reference = self.validation_config.get('use_reference', True)

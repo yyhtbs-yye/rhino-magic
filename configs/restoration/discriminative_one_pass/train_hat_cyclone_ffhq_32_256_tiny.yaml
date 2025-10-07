@@ -14,7 +14,7 @@ _vars:
 
   losses: 
       net:
-        path: 'rhino.loss.wrappers.pixel_loss'
+        path: 'rhino.nn.losses.wrappers.pixel_loss'
         name: 'PixelLoss'
         params: {}
 

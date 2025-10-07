@@ -7,27 +7,11 @@ from trainer.utils.ddp_utils import move_to_device
 from trainer.utils.build_components import build_module
 
 class Pix2PixBoat(BaseGanBoat):
-    """
-    Clean, minimal Pix2Pix boat built on top of BaseGanBoat.
-    Assumptions (kept simple and consistent):
-      - Batch contains two tensors: batch['src'] (source/condition) and batch['tgt'] (target)
-      - Generator: net(x) -> y_hat
-      - Critic: critic(x, y_or_yhat) -> adversarial score/logit tensor
-      - Losses:
-          self.losses['critic'](real, fake)   # D step
-          self.losses['critic'](fake, None)   # G adversarial part
-        Plus an L1 reconstruction term with weight self.l1_weight.
-      - Shapes/dims are correct; no adaptation logic.
-    """
 
     def __init__(self, config={}):
         super().__init__(config=config)
 
-        self.net_proc = build_module(boat_config['net_proc'])
-
-        # Pix2Pix L1 weight (lambda_L1 in the paper)
-        p2p_cfg = (boat_config or {}).get('pix2pix', {})
-        self.l1_weight = float(p2p_cfg.get('l1_weight', 10.0))
+        self.l1_weight = float(config['boat'].get('l1_weight', 10.0))
 
     @torch.no_grad()
     def predict(self, x: torch.Tensor, c) -> torch.Tensor:
@@ -41,7 +25,7 @@ class Pix2PixBoat(BaseGanBoat):
 
         noise = self.noise_generator.next(batch_size, device=self.device)
 
-        x = self.net_proc(x)
+        x = self.models['net_proc'](x)
 
         # Generate fake target (stop grad through G)
         with torch.no_grad():
@@ -62,7 +46,7 @@ class Pix2PixBoat(BaseGanBoat):
 
         noise = self.noise_generator.next(batch_size, device=self.device)
 
-        x = self.net_proc(x)
+        x = self.models['net_proc'](x)
 
         # Generate fake target (G requires grad)
         y_hat = self.models['net'](noise, x)
@@ -87,7 +71,7 @@ class Pix2PixBoat(BaseGanBoat):
 
         noise = self.noise_generator.next(batch_size, device=self.device)
 
-        x = self.net_proc(x)
+        x = self.models['net_proc'](x)
 
         y_hat = self.predict(noise, x)
 

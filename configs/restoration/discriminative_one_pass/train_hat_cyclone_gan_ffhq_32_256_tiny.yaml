@@ -4,24 +4,25 @@ boat:
   path: 'rhino.boats.restoration.adversarial_restoration_boat'
   name: 'AdversarialRestorationBoat'            
 
-  net:
-      path: 'cyclone.impl.hat.hat_arch'
-      name: 'HAT'
-      params: 
-        scale: 8
-        dim: 96
-        depths: [3, 3, 3, 3]
-        num_heads: 16
-        window_size: 16
+  models:
+    net:
+        path: 'cyclone.impl.hat.hat_arch'
+        name: 'HAT'
+        params: 
+          scale: 8
+          dim: 96
+          depths: [3, 3, 3, 3]
+          num_heads: 16
+          window_size: 16
 
-  classifier:
-      path: 'rhino.nn.classifiers.adversarial_discriminators'
-      name: 'PatchGANDiscriminator'
-      params: {}
+    classifier:
+        path: 'rhino.nn.classifiers.adversarial_discriminators'
+        name: 'PatchGANDiscriminator'
+        params: {}
 
   losses: 
       net:
-        path: 'rhino.loss.wrappers.pixel_loss'
+        path: 'rhino.nn.losses.wrappers.pixel_loss'
         name: 'PixelLoss'
         params: {}
       

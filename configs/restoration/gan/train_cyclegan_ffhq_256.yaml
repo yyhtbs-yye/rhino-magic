@@ -4,33 +4,34 @@ boat:
   path: 'rhino.boats.gan.cyclegan_boat'
   name: 'CycleGanBoat'
 
-  net: 
-    path: 'rhino.baked_nn.gan.cyclegan.cyclegan_generator'
-    name: 'BiResnetGenerators'
-    params:
-      x_channels: 3
-      y_channels: 3
-      norm_cfg: 
-        type: 'IN'
+  models:
+    net: 
+      path: 'rhino.baked_nn.gan.cyclegan.cyclegan_generator'
+      name: 'BiResnetGenerators'
+      params:
+        x_channels: 3
+        y_channels: 3
+        norm_cfg: 
+          type: 'IN'
 
-  critic:
-    path: 'rhino.baked_nn.gan.cyclegan.cyclegan_discrminator'
-    name: 'BiPatchDiscriminators'
-    params: 
-      y_channels: 3
-      x_channels: 3
-      norm_cfg: 
-        type: 'IN'
+    critic:
+      path: 'rhino.baked_nn.gan.cyclegan.cyclegan_discrminator'
+      name: 'BiPatchDiscriminators'
+      params: 
+        y_channels: 3
+        x_channels: 3
+        norm_cfg: 
+          type: 'IN'
 
-  net_proc:
-    path: 'torch.nn'
-    name: 'UpsamplingBilinear2d'
-    params: 
-      scale_factor: 8
+    net_proc:
+      path: 'torch.nn'
+      name: 'UpsamplingBilinear2d'
+      params: 
+        scale_factor: 8
 
   noise_generator: ~ 
 
-  loss:
+  losses:
     critic:
       path: 'rhino.nn.losses.gan_losses'
       name: 'HingeGANLoss'
@@ -119,6 +120,8 @@ data:
 _vars:
 
   devices: [0, 1, 2, 3]
+
+  max_epochs: 200
 
   train_batch_size: 32
   valid_batch_size: 32

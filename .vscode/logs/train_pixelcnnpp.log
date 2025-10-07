@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/home/admyyh/python_workspaces/rhino-magic/run_scripts/train_pixelcnnpp.py", line 2, in <module>
+    from trainer.rhino_ddp_train import main
+ModuleNotFoundError: No module named 'trainer'

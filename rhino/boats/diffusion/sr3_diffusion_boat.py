@@ -10,9 +10,9 @@ class SR3DiffusionBoat(BaseDiffusionBoat):
     def __init__(self, config={}):
         super().__init__(config=config)
 
-        self.models['lq_img_encoder'] = build_module(boat_config['lq_img_encoder'])
+        self.models['lq_img_encoder'] = build_module(self.boat_config['lq_img_encoder'])
         
-        self.use_reference = validation_config.get('use_reference', True)
+        self.use_reference = self.validation_config.get('use_reference', True)
 
     def predict(self, noise, lq=None):
         

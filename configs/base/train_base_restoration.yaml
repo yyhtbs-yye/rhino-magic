@@ -2,17 +2,9 @@ boat:
   path: 'rhino.boats.restoration.base_restoration_boat'
   name: 'BaseRestorationBoat'            
 
-  net: $net
-
-<<<<<<< HEAD:configs/base/train_base_restoration.yaml
-  losses: $loss
-=======
-  loss:
-    net:
-      path: 'rhino.losses.wrappers.pixel_loss'
-      name: 'PixelLoss'
-      params: {}
->>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3:configs/base/train_base_gen.yaml
+  models:
+    net: $net
+    losses: $loss
 
 optimization: 
   net:
@@ -101,10 +93,16 @@ data:
         type: DefaultSampler
         shuffle: true
 
-logging: 
-  root_dir: work_dirs
-  experiment_name: $experiment_name
-  log_every_n_steps: 50
+logging:
+  root_dir: 'work_dirs'
+  name: $experiment_name
+  loggers:
+    tensorboard:
+      path: 'trainer.loggers.tensorboard'
+      name: 'TensorBoardLogger'
+      params:
+        log_dir: 'work_dirs'
+        name: $experiment_name
 
 callbacks: 
   - path: trainer.callbacks.state_cleaner

@@ -4,28 +4,29 @@ boat:
   path: 'rhino.boats.gan.pix2pix_boat'
   name: 'Pix2PixBoat'
 
-  net: 
-    path: 'rhino.baked_nn.gan.pix2pix.pix2pix_generator'
-    name: 'UnetGenerator'
-    params:
-      in_channels: 6 # 3 for src image + 3 for noise
-      out_channels: 3
-      norm_cfg: 
-        type: 'GN'
+  models:
+    net: 
+      path: 'rhino.baked_nn.gan.pix2pix.pix2pix_generator'
+      name: 'UnetGenerator'
+      params:
+        in_channels: 6 # 3 for src image + 3 for noise
+        out_channels: 3
+        norm_cfg: 
+          type: 'GN'
 
-  critic:
-    path: 'rhino.baked_nn.gan.shared.patch_disc'
-    name: 'PatchDiscriminator'
-    params: 
-      in_channels: 6
-      norm_cfg: 
-        type: 'GN'
-  
-  net_proc:
-    path: 'torch.nn'
-    name: 'UpsamplingBilinear2d'
-    params: 
-      scale_factor: 8
+    critic:
+      path: 'rhino.baked_nn.gan.shared.patch_disc'
+      name: 'PatchDiscriminator'
+      params: 
+        in_channels: 6
+        norm_cfg: 
+          type: 'GN'
+    
+    net_proc:
+      path: 'torch.nn'
+      name: 'UpsamplingBilinear2d'
+      params: 
+        scale_factor: 8
 
   noise_generator:
     path: 'rhino.helpers.gan.noise_generator'
@@ -33,7 +34,8 @@ boat:
     params: 
       noise_size: [3, 256, 256]
       random_state: 42
-  loss:
+      
+  losses:
     net:
       path: 'rhino.nn.losses.gan_losses'
       name: 'HingeGANLoss'

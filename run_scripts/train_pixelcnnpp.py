@@ -2,8 +2,8 @@ import types
 from trainer.rhino_ddp_train import main
 
 args_dict = {
-    'config': 'configs/generation/autoregression/train_pixelcnn_ffhq_128.yaml',
-    'resume_from': None,
+    'config': 'configs/generation/autoregression/train_pixelcnnpp_ffhq_32.yaml',
+    'resume_from': None, 
 }
 
 args = types.SimpleNamespace(**args_dict)
@@ -11,5 +11,3 @@ args = types.SimpleNamespace(**args_dict)
 if __name__ == "__main__":
 
     main(args)
-
-

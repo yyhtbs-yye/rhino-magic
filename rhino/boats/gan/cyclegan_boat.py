@@ -9,11 +9,12 @@ from trainer.utils.ddp_utils import move_to_device
 
 class CycleGanBoat(BaseGanBoat):
 
-    def __init__(self, boat_config=None, optimization_config=None, validation_config=None):
+    def __init__(self, config={}):
 
-        super().__init__(boat_config, optimization_config, validation_config)
+        super().__init__(config=config)
 
-        self.net_proc = build_module(boat_config['net_proc'])
+        optimization_config = config.get('optimization', {})
+        validation_config = config.get('validation', {})
 
         # CycleGAN-specific weights
         self.cycle_weight = float(optimization_config.get('hyper_parameters', {}).get('cycle_weight', 0.5))
@@ -32,7 +33,7 @@ class CycleGanBoat(BaseGanBoat):
         """Discriminators: D_X and D_Y adversarial losses on real vs. generated."""
         x, y = batch['src'], batch['tgt']
         
-        x = self.net_proc(x)
+        x = self.models['net_proc'](x)
 
         # Generate fakes with no grad to generator
         with torch.no_grad():
@@ -54,7 +55,7 @@ class CycleGanBoat(BaseGanBoat):
         """Generators: adversarial (fool both D's) + cycle consistency + identity."""
         x, y = batch['src'], batch['tgt']
         
-        x = self.net_proc(x)
+        x = self.models['net_proc'](x)
 
         include_id = (self.identity_weight > 0.0)
         outs = self.models['net']((x, y), mode='full', include_identity=include_id)
@@ -85,7 +86,7 @@ class CycleGanBoat(BaseGanBoat):
         batch = move_to_device(batch, self.device)
         x, y = batch['src'], batch['tgt']
 
-        x = self.net_proc(x)
+        x = self.models['net_proc'](x)
 
         x2y = self.predict(x, 'x2y')
         y2x = self.predict(y, 'y2x')

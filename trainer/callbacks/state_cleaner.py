@@ -20,18 +20,6 @@ class KeepTopKStateCallback(Callback):
                     except OSError as e:
                         print(f"Error removing {path}: {e}")
 
-        if len(train_states['valid_step_records']) > 0:
-            # Same logic can be applied for step records if needed
-            non_top_k_paths = get_non_top_k_state_paths(train_states['valid_step_records'], self.top_k)
-            
-            for path in non_top_k_paths:
-                if os.path.exists(path):
-                    try:
-                        os.remove(path)
-                        print(f"Removed step checkpoint: {path}")
-                    except OSError as e:
-                        print(f"Error removing {path}: {e}")
-
 
 def get_non_top_k_state_paths(records, k=3):
     # Create a list of tuples (target_metric, state_path)

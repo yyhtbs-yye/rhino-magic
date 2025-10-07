@@ -9,36 +9,37 @@ boat:
     model_layer_names: 
       'net': ['transformer_blocks.3.ff.net.2']
 
-  net:
-    path: 'rhino.nn.wrappers.dit_2d_flexible_wrapper'
-    name: 'DiT2DFlexibleWrapper'
-    config:
-      mode: 'concat'
-      sample_size: 4
-      sample_channels: 4
-      patch_size: 1
-      num_layers: 8
-      condition_channels: 3
-      out_channels: 4
-      num_embeds_ada_norm: 1
-      attention_head_dim: 64
-      num_attention_heads: 8
-      norm_num_groups: 32
-      norm_eps: 0.00001
-
-  latent_encoder:
-    path: 'rhino.nn.wrappers.autoencoder_kl_wrapper' 
-    name: 'AutoencoderKLWrapper'
-    pretrained: 'stabilityai/sd-vae-ft-mse'
-
-  context_encoder:
-    path: torch.nn
-    name: Identity
-    params: {}
-
-  loss:
+  models:
     net:
-      path: 'rhino.losses.wrappers.repa_loss'
+      path: 'rhino.nn.wrappers.dit_2d_flexible_wrapper'
+      name: 'DiT2DFlexibleWrapper'
+      config:
+        mode: 'concat'
+        sample_size: 4
+        sample_channels: 4
+        patch_size: 1
+        num_layers: 8
+        condition_channels: 3
+        out_channels: 4
+        num_embeds_ada_norm: 1
+        attention_head_dim: 64
+        num_attention_heads: 8
+        norm_num_groups: 32
+        norm_eps: 0.00001
+
+    latent_encoder:
+      path: 'rhino.nn.wrappers.autoencoder_kl_wrapper' 
+      name: 'AutoencoderKLWrapper'
+      pretrained: 'stabilityai/sd-vae-ft-mse'
+
+    context_encoder:
+      path: torch.nn
+      name: Identity
+      params: {}
+
+  losses:
+    net:
+      path: 'rhino.nn.losseses.wrappers.repa_loss'
       name: 'REPALoss'
       params: 
         feature_dim: 512

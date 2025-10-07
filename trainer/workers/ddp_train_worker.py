@@ -23,7 +23,10 @@ def ddp_train_worker(rank, addr, port, config, data_module):
 
     # ----- Build boat -----
     boat_conf = config['boat']
-    Boat = get_class(boat_conf['path'], boat_conf['name'])
+    if 'path' not in boat_conf and 'name' not in boat_conf:
+        Boat = get_class(boat_conf['_target_'])
+    else:
+        Boat = get_class(boat_conf['path'], boat_conf['name'])
     boat = Boat(config)
     
     # ----- Resume boat -----
@@ -65,7 +68,6 @@ def ddp_train_worker(rank, addr, port, config, data_module):
         callbacks   = [build_module(cb) for cb in (config.get('callbacks', []))]
 
     config['trainer']['valid_epoch_records'] = {}
-    config['trainer']['valid_step_records'] = {}
 
     primary = get_primary_trainable_module(boat)
 
@@ -104,8 +106,8 @@ def ddp_train_worker(rank, addr, port, config, data_module):
         scaler = None
     
     # Dataloaders
-    train_loader = data_module.make_train_loader(world_size, rank)
-    valid_loader = data_module.make_valid_loader(world_size, rank)
+    train_loader = data_module.make_train_loader(config['world_size'], rank)
+    valid_loader = data_module.make_valid_loader(config['world_size'], rank)
 
     # Train
     for epoch in range(config['trainer']['start_epoch'], config['trainer'].get("max_epochs", 10)):
@@ -116,11 +118,11 @@ def ddp_train_worker(rank, addr, port, config, data_module):
         if is_rank0():
             for cb in callbacks: cb.on_epoch_start(config['trainer'], boat, epoch)
 
-        run_train(boat, train_loader, logger, epoch, autocast_ctx, scaler, world_size)
+        run_train(boat, train_loader, config, epoch, autocast_ctx, scaler)
 
         if epoch % config['trainer']['val_check_epochs'] == 0:
 
-            target_metric = run_validation(boat, valid_loader, config['trainer'], device, logger, world_size)
+            target_metric = run_validation(boat, valid_loader, config)
 
             config['trainer']['valid_epoch_records'][epoch] = {'target_metric': target_metric.detach().cpu()}
 
@@ -132,6 +134,7 @@ def ddp_train_worker(rank, addr, port, config, data_module):
                         config['trainer']['valid_epoch_records'][epoch] = {}
                     config['trainer']['valid_epoch_records'][epoch]['state_path'] = state_path
 
+        # Sync EMA after each epoch
         if ema_keys and primary is not None:
             for k in ema_keys:
                 broadcast_module_state(boat.models[k], src_rank=0)
@@ -144,13 +147,11 @@ def ddp_train_worker(rank, addr, port, config, data_module):
 
     dist.destroy_process_group()
 
-def run_train(boat, train_loader, logger, epoch, autocast_ctx, scaler, world_size):
+def run_train(boat, train_loader, config, epoch, autocast_ctx, scaler):
 
     boat.train()
 
     dataset_length = len(train_loader.dataset) if hasattr(train_loader, 'dataset') else len(train_loader)
-
-    # Get Batch size from dataloader
     batch_size = train_loader.batch_size if hasattr(train_loader, 'batch_size') else None
 
     for step, (batch_idx_batch) in enumerate(train_loader, start=1):
@@ -171,10 +172,12 @@ def run_train(boat, train_loader, logger, epoch, autocast_ctx, scaler, world_siz
             losses = boat.training_step(batch, batch_idx, epoch, scaler=scaler)
 
         if is_rank0() and losses:
-            boat.log_train_losses(logger, losses)
-            print(f"Training batch index: {batch_idx * batch_size * world_size} / {dataset_length}, epoch: {epoch}, step: {step}, global_step: {boat.get_global_step()}")
+            
+            boat.log_train_losses(losses)
 
-def run_validation(boat, val_dataloader, config['trainer'], device, logger, world_size):
+            print(f"Training batch index: {batch_idx * batch_size * config['world_size']} / {dataset_length}, epoch: {epoch}, step: {step}, global_step: {boat.get_global_step()}")
+
+def run_validation(boat, val_dataloader, config):
 
     boat.eval()
     aggr_metrics = {}
@@ -194,8 +197,8 @@ def run_validation(boat, val_dataloader, config['trainer'], device, logger, worl
                     aggr_metrics[key] += metrics[key]
     
             if is_rank0():
-                boat.visualize_validation(logger, named_imgs, batch_idx, config['trainer'])
-                print(f"Validation Completion: {batch_idx * batch_size * world_size} / {dataset_length}, validation over {batch_idx + 1} batches done at global_step {boat.get_global_step()}")
+                boat.visualize_validation(named_imgs, batch_idx, config['trainer'])
+                print(f"Validation Completion: {batch_idx * batch_size * config['world_size']} / {dataset_length}, validation over {batch_idx + 1} batches done at global_step {boat.get_global_step()}")
 
         for key in aggr_metrics:
             aggr_metrics[key] /= batch_idx
@@ -210,10 +213,12 @@ def run_validation(boat, val_dataloader, config['trainer'], device, logger, worl
         aggr_metrics[key] = aggr_metrics[key]
 
     if is_rank0() and aggr_metrics:
-        boat.log_valid_metrics(logger, aggr_metrics)
+        boat.log_valid_metrics(aggr_metrics)
 
-    if config['trainer']['target_metric_name'] not in aggr_metrics:
-        raise KeyError(f"'{config['trainer']['target_metric_name']}' not found in validation metrics: {list(aggr_metrics)}")
+    target_metric_name = config['validation']['target_metric_name']
 
-    return aggr_metrics[config['trainer']['target_metric_name']]
+    if target_metric_name not in aggr_metrics:
+        raise KeyError(f"'{target_metric_name}' not found in validation metrics: {list(aggr_metrics)}")
+
+    return aggr_metrics[target_metric_name]
 

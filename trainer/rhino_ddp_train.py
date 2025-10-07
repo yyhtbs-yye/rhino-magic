@@ -10,7 +10,7 @@ torch.set_float32_matmul_precision('high')
 def main(args):
     config = load_yaml_config(args.config)
 
-    root_dir = Path(config['logging']['root_dir']) / config['logging']['experiment_name']
+    root_dir = Path(config['logging']['root_dir']) / config['logging']['name']
     root_dir.mkdir(parents=True, exist_ok=True)
     run_folder = determine_run_folder(root_dir)
 

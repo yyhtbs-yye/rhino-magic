@@ -2,9 +2,9 @@ _import: configs/base/train_base_ddim.yaml
 
 _vars:
 
-  devices: [0, 1]
+  devices: [0, 1, 2, 3]
 
-  batch_size: 16
+  batch_size: 32
   num_workers: 16
 
   in_channels: 3

@@ -12,16 +12,13 @@ class BaseDiffusionBoat(BaseBoat):
 
         assert config is not None, "main config must be provided"
 
-        self.models['net'] = build_module(boat_config['net'])
-        self.models['scheduler'] = build_module(boat_config['scheduler'])
-        self.models['solver'] = build_module(boat_config['solver'])
-
-        self.boat_config = boat_config
-        self.optimization_config = optimization_config or {}
-        self.validation_config = validation_config or {}
+        # Store configurations
+        self.boat_config = config.get('boat', {})
+        self.optimization_config = config.get('optimization', {})
+        self.validation_config = config.get('validation', {})
 
         self.use_ema = self.optimization_config.get('use_ema', False)
-        self.use_reference = validation_config.get('use_reference', False)
+        self.use_reference = self.validation_config.get('use_reference', False)
 
         if self.use_ema:
             self._setup_ema()

@@ -23,29 +23,30 @@ boat:
     # start_stage_idx: 0
     # max_stage_idx: 6
 
-  net:
-    path: 'rhino.baked_nn.gan.pggan.pggan_generator'
-    name: 'PGGANGenerator'
-    params:
-      noise_size: 128        # must match your noise_generator.next(...).shape[1]
-      out_scale: 256        # final output resolution (must match last progressive stage)
-      # below are optional, shown with ProGAN-ish defaults
-      base_channels: 8192
-      channel_decay: 1.0
-      max_channels: 512
-      fused_upconv: true
+  models:
+    net:
+      path: 'rhino.baked_nn.gan.pggan.pggan_generator'
+      name: 'PGGANGenerator'
+      params:
+        noise_size: 128        # must match your noise_generator.next(...).shape[1]
+        out_scale: 256        # final output resolution (must match last progressive stage)
+        # below are optional, shown with ProGAN-ish defaults
+        base_channels: 8192
+        channel_decay: 1.0
+        max_channels: 512
+        fused_upconv: true
 
 
-  critic:
-    path: 'rhino.baked_nn.gan.pggan.pggan_discriminator'
-    name: 'PGGANDiscriminator'
-    params:
-      in_scale: 256         # final input resolution (must match last progressive stage)
-      base_channels: 8192
-      max_channels: 512
-      in_channels: 3
-      channel_decay: 1.0
-      fused_convdown: true
+    critic:
+      path: 'rhino.baked_nn.gan.pggan.pggan_discriminator'
+      name: 'PGGANDiscriminator'
+      params:
+        in_scale: 256         # final input resolution (must match last progressive stage)
+        base_channels: 8192
+        max_channels: 512
+        in_channels: 3
+        channel_decay: 1.0
+        fused_convdown: true
 
   noise_generator:
     path: 'rhino.helpers.gan.noise_generator'
@@ -54,7 +55,7 @@ boat:
       noise_size: 128
       random_state: 42
 
-  loss:
+  losses:
     net:
       path: 'rhino.nn.losses.gan_losses'
       name: 'HingeGANLoss'

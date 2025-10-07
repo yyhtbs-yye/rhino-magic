@@ -10,7 +10,7 @@ class LatentDiffusionBoat(BaseDiffusionBoat):
     def __init__(self, config={}):
         super().__init__(config=config)
 
-        self.models['latent_encoder'] = build_module(boat_config['latent_encoder']) if 'latent_encoder' in boat_config else None
+        self.models['latent_encoder'] = build_module(self.boat_config['latent_encoder']) if 'latent_encoder' in self.boat_config else None
         
         if self.models['latent_encoder'] is not None:
             for param in self.models['latent_encoder'].parameters():

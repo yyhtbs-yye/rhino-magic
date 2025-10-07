@@ -2,56 +2,58 @@ boat:
   path: 'rhino.boats.base_diffusion_boat'
   name: 'BaseDiffusionBoat'            
 
-  net:
-    path: 'rhino.nn.wrappers.dit_2d_flexible_wrapper'
-    name: 'DiT2DFlexibleWrapper'
-    config:
-      mode: 'concat'
-      sample_size: $sample_size
-      sample_channels: $sample_channels
-      patch_size: 2
-      num_layers: 8
-      condition_channels: $condition_channels
-      out_channels: $out_channels
-      num_embeds_ada_norm: 1
-      attention_head_dim: 64
-      num_attention_heads: 8
-      # norm_type: group
-      norm_num_groups: 32
-      norm_eps: 0.00001
-
-  context_encoder: {}
-
-  scheduler:
-    path: 'rhino.helpers.diffusions.schedulers.scheduling_ddim'
-    name: 'DDIMScheduler'
-    config:
-      beta_start: 0.0001
-      beta_end: 0.02
-      beta_schedule: "linear"
-      steps_offset: 1
-      clip_sample: false
-      set_alpha_to_one: false
-      prediction_type: "epsilon"
-      num_train_timesteps: 1000
-
-  solver:
-    path: 'rhino.helpers.diffusions.solvers.sampling_ddim'
-    name: 'DDIMSampler'
-    config:
-      beta_start: 0.0001
-      beta_end: 0.02
-      beta_schedule: "linear"
-      steps_offset: 1
-      clip_sample: false
-      set_alpha_to_one: false
-      prediction_type: "epsilon"
-      num_train_timesteps: 1000
-      eta: 0.0
-      num_inference_steps: 50
-  loss:
+  models:
     net:
-      path: 'rhino.losses.wrappers.pixel_loss'
+      path: 'rhino.nn.wrappers.dit_2d_flexible_wrapper'
+      name: 'DiT2DFlexibleWrapper'
+      config:
+        mode: 'concat'
+        sample_size: $sample_size
+        sample_channels: $sample_channels
+        patch_size: 2
+        num_layers: 8
+        condition_channels: $condition_channels
+        out_channels: $out_channels
+        num_embeds_ada_norm: 1
+        attention_head_dim: 64
+        num_attention_heads: 8
+        # norm_type: group
+        norm_num_groups: 32
+        norm_eps: 0.00001
+
+    context_encoder: {}
+
+    scheduler:
+      path: 'rhino.helpers.diffusion.schedulers.scheduling_ddim'
+      name: 'DDIMScheduler'
+      config:
+        beta_start: 0.0001
+        beta_end: 0.02
+        beta_schedule: "linear"
+        steps_offset: 1
+        clip_sample: false
+        set_alpha_to_one: false
+        prediction_type: "epsilon"
+        num_train_timesteps: 1000
+
+    solver:
+      path: 'rhino.helpers.diffusion.solvers.sampling_ddim'
+      name: 'DDIMSampler'
+      config:
+        beta_start: 0.0001
+        beta_end: 0.02
+        beta_schedule: "linear"
+        steps_offset: 1
+        clip_sample: false
+        set_alpha_to_one: false
+        prediction_type: "epsilon"
+        num_train_timesteps: 1000
+        eta: 0.0
+        num_inference_steps: 50
+  
+  losses:
+    net:
+      path: 'rhino.nn.losseses.wrappers.pixel_loss'
       name: 'PixelLoss'
       params: {}
 
@@ -109,13 +111,7 @@ data:
             lq: ''
           pipeline:
             - type: LoadImageFromFile
-<<<<<<< HEAD
               keys: [gt, lq]
-=======
-              keys: [gt, cond]
-            # - type: LoadImageFromNpz
-            #   keys: [fx]
->>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
             - type: Normalize
               keys: [gt, lq]
               mean: [0.5, 0.5, 0.5]
@@ -136,14 +132,7 @@ data:
           folder_paths: $valid_folder_paths
           data_prefix:
             gt: ''
-<<<<<<< HEAD
             lq: ''
-=======
-            cond: ''
-          extensions:
-            gt: [png, jpg]
-            cond: [png, jpg]
->>>>>>> 7e3c9336db6dd5c66c1e62faade22b251b0f42a3
           pipeline:
             - type: LoadImageFromFile
               keys: [gt, lq]
@@ -158,10 +147,16 @@ data:
         type: DefaultSampler
         shuffle: true
 
-logging: 
-  root_dir: work_dirs
-  experiment_name: $experiment_name
-  log_every_n_steps: 50
+logging:
+  root_dir: 'work_dirs'
+  name: $experiment_name
+  loggers:
+    tensorboard:
+      path: 'trainer.loggers.tensorboard'
+      name: 'TensorBoardLogger'
+      params:
+        log_dir: 'work_dirs'
+        name: $experiment_name
 
 callbacks: 
   - path: trainer.callbacks.state_cleaner

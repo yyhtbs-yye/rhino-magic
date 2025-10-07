@@ -18,17 +18,15 @@ class DDPTrainer:
     """
     One-process-per-GPU trainer. No torchrun needed.
     - Trainer owns DDP/AMP/no_sync.
-    - Boat owns training_step (loss -> backward -> maybe step), DDP-agnostic.
     """
     def __init__(self, config):
         assert config is not None, "config must be provided"
+        self.config = config
 
         self.devices = config['trainer'].get('devices', [0])
         total = len(self.devices)
         world_size = total if self.devices is None else max(1, min(total, total))
         self.config['world_size'] = world_size
-
-        self.config = config
 
     def fit(self, data_module):
 
@@ -39,9 +37,8 @@ class DDPTrainer:
 
             addr, port = "127.0.0.1", find_free_port()
 
-            ddp_train_worker(rank=0, world_size=1, addr=addr, port=port,
-                             devices=self.devices, config=self.config, 
-                             data_module=data_module)
+            ddp_train_worker(rank=0, addr=addr, port=port,
+                             config=self.config, data_module=data_module)
 
             return
 
@@ -53,7 +50,7 @@ class DDPTrainer:
         mp.start_processes(
             ddp_train_worker,
             nprocs=self.config['world_size'],
-            args=(self.config['world_size'], addr, port, self.devices, self.config, data_module),
+            args=(addr, port, self.config, data_module),
             start_method="spawn",
             join=True,
         )

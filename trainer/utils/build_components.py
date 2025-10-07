@@ -1,6 +1,11 @@
 import importlib
 
-def get_class(path, name):
+def get_class(path, name=None):
+    """Dynamically load a class from a module."""
+
+    if name is None:
+        path, name = path.rsplit('.', 1)
+
     module = importlib.import_module(path)
     return getattr(module, name)
 
@@ -9,8 +14,13 @@ def build_module(config):
     if config is None:
         return None
     
-    """Build a module from configuration."""
-    class_ = get_class(config['path'], config['name'])
+    if 'path' in config and 'name' in config:
+        """Build a module from configuration."""
+        class_ = get_class(config['path'], config['name'])
+    elif '_target_' in config:
+        class_ = get_class(config['_target_'])
+    else:
+        raise ValueError("Configuration must contain 'path' and 'name' or '_target_' key.")
     
     if 'pretrained' in config and hasattr(class_, 'from_pretrained'):
         return class_.from_pretrained(config['pretrained'])

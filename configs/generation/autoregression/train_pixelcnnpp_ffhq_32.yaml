@@ -1,0 +1,154 @@
+_import: configs/base/train_base.yaml
+
+boat:
+  _target_: 'rhino.boats.autoregression.base_autoregression_boat.BaseAutoregressionBoat'
+
+  models:
+    net:
+      path: 'rhino.nn.autoregression.pixelcnnpp.pixelcnnpp'
+      name: 'PixelCNNPP'
+      params:
+        kernel_size: $kernel_size
+        in_channels: $in_channels
+        hidden_channels: $hidden_channels
+        n_blocks: $n_blocks
+        nr_mix: $nr_mix
+  
+  losses: 
+    net:
+      path: 'rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_loss'
+      name: 'DMOLNLLoss'
+      params: 
+        in_channels: $in_channels
+        nr_mix: $nr_mix
+
+optimization: 
+  net:
+    path: 'torch.optim'
+    name: 'Adam'
+    params:
+      lr: 0.0003
+      betas: [0.9, 0.999]
+      weight_decay: 0.0
+    lr_scheduler: {}
+    
+  use_ema:
+    ema_decay: 0.9995
+    ema_start: $ema_start
+
+logging:
+  root_dir: 'work_dirs'
+  name: $experiment_name
+  loggers:
+    tensorboard:
+      path: 'trainer.loggers.tensorboard'
+      name: 'TensorBoardLogger'
+      params:
+        log_dir: 'work_dirs'
+        name: $experiment_name
+
+trainer: 
+  devices: $devices
+  max_epochs: 200
+  val_check_epochs: 1
+  state_save_epochs: 1
+  visualization:
+    save_images: true
+    wnb: [0.5, 0.5]  # for visualization
+
+validation: 
+  save_images: true
+  num_vis_samples: 4
+  use_reference: true
+  target_metric_name: 'dummy_metric'
+  metrics:
+    dummy_metric:
+      path: 'rhino.metrics.dummy_metric'
+      name: 'DummyMetric'
+      params: {}
+
+# Data configuration
+data:
+  path: trainer.data_modules.image_data_module
+  name: DistTrainDistValidDataModule
+  config: 
+    train_dataloader:
+      dataset:
+        path: 'trainer.torch_datasets.basic_image_dataset'
+        name: 'BasicImageDataset'         # Name of the model class to use
+        params:
+          # max_dataset_size: 256
+          folder_paths: $train_folder_paths
+          data_prefix:
+            gt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [gt]
+            - type: Normalize
+              keys: [gt]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $train_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+
+    # Validation dataloader configuration
+    valid_dataloader:
+      dataset:
+        path: 'trainer.torch_datasets.basic_image_dataset'           # Path to import the model class
+        name: 'BasicImageDataset'         # Name of the model class to use
+        params:
+          max_dataset_size: 32
+          folder_paths: $valid_folder_paths
+          data_prefix:
+            gt: ''
+          pipeline:
+            - type: LoadImageFromFile
+              keys: [gt]
+            - type: Normalize
+              keys: [gt]
+              mean: [0.5, 0.5, 0.5]
+              std: [0.5, 0.5, 0.5]
+      batch_size: $valid_batch_size
+      num_workers: $num_workers
+      pin_memory: false
+      persistent_workers: true
+      sampler:
+        type: DefaultSampler
+        shuffle: true
+
+
+callbacks: 
+  - path: trainer.callbacks.state_cleaner
+    name: KeepTopKStateCallback
+    params:
+      top_k: 5
+
+_vars:
+
+  devices: [0, 1, 4, 5]
+
+  train_batch_size: 64
+  valid_batch_size: 8
+  num_workers: 16
+  
+
+  in_channels: 3
+  kernel_size: 3
+  hidden_channels: 256
+  n_blocks: 12
+  nr_mix: 10
+
+  train_folder_paths:
+    gt: data/ffhq/ffhq_imgs/ffhq_32
+    
+  valid_folder_paths:
+    gt: data/celeba/subsets/celeba_32
+
+  experiment_name: pixelcnnpp_ffhq_32
+
+  ema_start: 0

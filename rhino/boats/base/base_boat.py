@@ -20,6 +20,12 @@ class BaseBoat(TemplateBoat):
 
         self.total_micro_steps = self.optimization_config.pop('total_micro_steps', 1)
         self.target_loss_key = self.optimization_config.pop('target_loss_key', 'total_loss')
+        self.models = {}
+        self.losses = {}
+        self.optimizers = {}
+        self.lr_schedulers = {}
+        self.metrics = {}
+        self.loggers = {}
 
         self.build_models()
         self.build_losses()
@@ -132,7 +138,7 @@ class BaseBoat(TemplateBoat):
 
     # ------------------------------------ Visualization ---------------------------------------------
 
-    def visualize_validation(self, logger, named_imgs, batch_idx, trainer_config):
+    def visualize_validation(self, named_imgs, batch_idx, trainer_config):
 
         visualization_config = trainer_config.get('visualization', {})
 
@@ -149,7 +155,7 @@ class BaseBoat(TemplateBoat):
                 wnb = visualization_config.get('wnb', (0.5, 0.5))
                 # Log visualizations to the experiment tracker
                 visualize_image_dict(
-                    logger=logger,
+                    logger=list(self.loggers.values())[0],
                     images_dict=named_imgs,
                     keys=list(named_imgs.keys()),
                     global_step=self.get_global_step(),
@@ -160,22 +166,21 @@ class BaseBoat(TemplateBoat):
 
     # ------------------------------------ Result Logging ---------------------------------------------
 
-    def _log_metrics(self, logger, results, prefix=''):
+    def _log_values(self, results, prefix=''):
+        for _, logger in self.loggers.items():
+            logger.log_metrics(results, step=self.get_global_step(), prefix=prefix)
 
-        logger.log_metrics(results, step=self.get_global_step(), prefix=prefix)
+    def _log_value(self, result, metric_name, prefix=''):
+        for _, logger in self.loggers.items():
+            logger.log_metrics({metric_name: result}, step=self.get_global_step(), prefix=prefix)
 
-    def _log_metric(self, logger, result, metric_name, prefix=''):
-        
-        logger.log_metrics({metric_name: result}, step=self.get_global_step(), prefix=prefix)
-
-    def log_train_losses(self, logger, losses):
+    def log_train_losses(self, losses):
         for loss_name, loss_value in losses.items():
-            if isinstance(loss_value, torch.Tensor):
-                self._log_metric(logger, loss_value.detach(), metric_name=loss_name, prefix='train')
+            self._log_value(loss_value.detach(), metric_name=loss_name, prefix='train')
 
-    def log_valid_metrics(self, logger, metrics):
+    def log_valid_metrics(self, metrics):
         for metric_name, metric_value in metrics.items():
-            self._log_metric(logger, metric_value.detach(), metric_name=metric_name, prefix='valid')
+            self._log_value(metric_value.detach(), metric_name=metric_name, prefix='valid')
 
     # ------------------------------------ Global Step Mgmt ---------------------------------------------
 
@@ -202,17 +207,17 @@ class BaseBoat(TemplateBoat):
         self.metrics = build_modules(self.validation_config.get('metrics', {}))
 
     def build_optimizers(self):
-        for model_name in self.optimization_config:
-            if 'use_ema' in model_name or model_name == 'hyper_parameters':
+        for opt_name in self.optimization_config:
+            if 'ema' in opt_name or opt_name not in self.models:
                 continue
             new_optimizer = build_optimizer(
-                self.models[model_name].parameters(), 
-                self.optimization_config[model_name]
+                self.models[opt_name].parameters(), 
+                self.optimization_config[opt_name]
             )
-            if self.optimizers.get(model_name) is None or type(new_optimizer) != type(self.optimizers[model_name]):
-                self.optimizers[model_name] = new_optimizer
+            if self.optimizers.get(opt_name) is None or type(new_optimizer) != type(self.optimizers[opt_name]):
+                self.optimizers[opt_name] = new_optimizer
 
-        self.build_lr_scheduler_by_name(model_name)
+        self.build_lr_scheduler_by_name(opt_name)
 
     def build_lr_scheduler_by_name(self, model_name):
 
@@ -223,8 +228,8 @@ class BaseBoat(TemplateBoat):
     
     def build_loggers(self):
         self.loggers = {}
-        for logger_name in self.logging_config:
-            self.loggers[logger_name] = build_logger(self.logging_config[logger_name])
+        for logger_name in self.logging_config['loggers']:
+            self.loggers[logger_name] = build_logger(self.logging_config['loggers'][logger_name])
 
     # ------------------------------------ EMA ---------------------------------------------
     def _setup_ema(self):

@@ -9,13 +9,8 @@ class BaseGanBoat(BaseBoat):
         
         assert config is not None, "main config must be provided"
 
-        # Build the model
-        self.models['net'] = build_module(boat_config['net'])
-        self.models['critic'] = build_module(boat_config['critic'])
-
-        self.boat_config = boat_config
-        self.optimization_config = optimization_config or {}
-        self.validation_config = validation_config or {}
+        optimization_config = config.get('optimization', {})
+        validation_config = config.get('validation', {})
 
         self.concurrent = bool(optimization_config.get('hyper_parameters', {}).get('concurrent', False))
         self.g_interval = int(optimization_config.get('hyper_parameters', {}).get('g_interval', 1))

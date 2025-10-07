@@ -1,54 +1,74 @@
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 
-# -------------------------------
-# Masked Conv2D (standard PixelCNN mask)
-# -------------------------------
 class MaskedConv2d(nn.Conv2d):
-    """
-    'A' mask: forbids center pixel.
-    'B' mask: allows center pixel.
-    Causal over spatial dims only (height, width).
-    Channel-AR is handled by reshaping W->W*C outside this layer.
-    """
-    def __init__(self, mask_type: str, in_channels: int, out_channels: int, kernel_size: int, **kwargs):
-        assert mask_type in {"A", "B"}
-        padding = kwargs.pop("padding", kernel_size // 2)
-        super().__init__(in_channels, out_channels, kernel_size, padding=padding, bias=True, **kwargs)
-        self.register_buffer("mask", torch.ones_like(self.weight))
-        k = self.kernel_size[0]
-        assert self.kernel_size[0] == self.kernel_size[1], "Use odd square kernels (e.g., 3, 5)."
+    def __init__(self, mask_type: str,
+                 in_channels: int, out_channels: int,
+                 kernel_size: int | tuple[int, int] = 3,
+                 *, n_types: int = 3,
+                 type_map_in: torch.Tensor | None = None,
+                 type_map_out: torch.Tensor | None = None,
+                 bias: bool = True, **kwargs):
+        assert mask_type in ("A", "B")
+        if isinstance(kernel_size, int):
+            kH = kW = kernel_size
+        else:
+            kH, kW = kernel_size
+        if 'padding' not in kwargs:
+            kwargs['padding'] = (kH // 2, kW // 2)
 
-        # Build spatial mask
-        self.mask[..., k // 2, k // 2 + (mask_type == "B"):] = 0  # right of center
-        self.mask[..., k // 2 + 1:, :] = 0                        # rows below
+        super().__init__(in_channels, out_channels, (kH, kW), bias=bias, **kwargs)
+        assert self.groups == 1, "Grouped conv not supported in this mask builder."
+
+        yc, xc = kH // 2, kW // 2
+
+        # --- 1) Spatial half-plane mask (applies to all channel pairs) ---
+        mask = torch.ones_like(self.weight, dtype=torch.float32)
+        if yc + 1 < kH:
+            mask[:, :, yc + 1:, :] = 0.0        # rows strictly below center
+        if xc + 1 < kW:
+            mask[:, :, yc, xc + 1:] = 0.0       # cols strictly right on center row
+        # DO NOT zero the center here; channel gating will decide it.
+
+        # --- 2) Channel gating at the center position only ---
+        # Build type labels for input/output channels.
+        if type_map_in is None:
+            t_in = torch.arange(in_channels) % n_types          # [Cin]
+        else:
+            t_in = torch.as_tensor(type_map_in, dtype=torch.long)
+            assert t_in.numel() == in_channels
+        
+        if type_map_out is None:
+            t_out = torch.arange(out_channels) % n_types        # [Cout]
+        else:
+            t_out = torch.as_tensor(type_map_out, dtype=torch.long)
+            assert t_out.numel() == out_channels
 
         if mask_type == "A":
-            self.mask[..., k // 2, k // 2] = 0  # forbid center for first layer
+            center_ok = (t_in[None, :] <  t_out[:, None]).float()   # [Cout, Cin]
+        else:  # "B"
+            center_ok = (t_in[None, :] <= t_out[:, None]).float()
+
+        mask[:, :, yc, xc] = center_ok
+
+        self.register_buffer("mask", mask)
+        self.n_types = n_types
+        self.register_buffer("type_map_in_buf", t_in)
+        self.register_buffer("type_map_out_buf", t_out)
 
     def forward(self, x):
-        w = self.weight * self.mask            # stays in the graph
-        return F.conv2d(x, w, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return F.conv2d(x, self.weight * self.mask, self.bias,
+                        self.stride, self.padding, self.dilation, self.groups)
 
-# -------------------------------
-# Residual Block with MaskedConv
-# -------------------------------
-class PixelCNNResidualBlock(nn.Module):
-    def __init__(self, channels: int, kernel_size: int = 3, dropout: float = 0.0):
+class ResMaskedBlock(nn.Module):
+    def __init__(self, C, k=7, n_types=3, p=0.0):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.ReplicationPad2d(0),  # no-op, keeps TorchScript happy if needed
-            nn.GroupNorm(num_groups=1, num_channels=channels),
-            nn.ReLU(inplace=True),
-            MaskedConv2d("B", channels, channels, kernel_size=kernel_size),
-            nn.Dropout(dropout),
-            nn.GroupNorm(num_groups=1, num_channels=channels),
-            nn.ReLU(inplace=True),
-            MaskedConv2d("B", channels, channels, kernel_size=1),
-        )
-
+        self.conv1 = MaskedConv2d('B', C, C, k, n_types=n_types)
+        self.act1  = nn.ReLU(inplace=True)
+        self.conv2 = MaskedConv2d('B', C, C, k, n_types=n_types)
+        self.drop  = nn.Dropout2d(p) if p > 0 else nn.Identity()
     def forward(self, x):
-        return x + self.net(x)
+        h = self.act1(self.conv1(x))
+        h = self.drop(self.conv2(h))
+        return F.relu(x + h)
