@@ -1,17 +1,18 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple
+from typing import Tuple
 
-from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_modules import ShiftedConv2d, GatedResidualBlock, Nin
-from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_utils import (n_out_channels_for_dmol, 
-                                                                 sample_from_discretized_mix_logistic)
+from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_modules import ShiftedConv2d, GatedResidualBlock
+from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_utils import get_n_out_channels_for_dmol
+from rhino.nn.autoregression.utils.sample_from_discretized_mix_logistic import sample_from_discretized_mix_logistic
 
 class PixelCNNPP(nn.Module):
     """
-    PixelCNN++ with shifted convolutions (no masks),
-    dual stacks (down & downright), and DMOL output head.
+    PixelCNN++ with shifted convolutions (no masks), dual stacks (down & downright), and DMOL output head.
 
-    Constructor kept compatible with your signature; `embed_dim` is unused.
+    It is output continuos space.
+    
+
     """
     def __init__(
         self,
@@ -52,7 +53,7 @@ class PixelCNNPP(nn.Module):
                     aux_channels=0,
                 )
             )
-            self.v_to_h.append(Nin(hidden_channels, hidden_channels))
+            self.v_to_h.append(nn.Conv2d(hidden_channels, hidden_channels, kernel_size=1))
 
             self.h_blocks.append(
                 GatedResidualBlock(
@@ -63,13 +64,13 @@ class PixelCNNPP(nn.Module):
                     aux_channels=hidden_channels,  # receives v each block
                 )
             )
-            self.skip_convs.append(Nin(hidden_channels, hidden_channels))
+            self.skip_convs.append(nn.Conv2d(hidden_channels, hidden_channels, kernel_size=1))
 
         # Output head: sum of skips -> DMOL params
-        out_channels = n_out_channels_for_dmol(in_channels, self.nr_mix)
+        out_channels = get_n_out_channels_for_dmol(in_channels, self.nr_mix)
         self.out_head = nn.Sequential(
             nn.ELU(inplace=False),
-            Nin(hidden_channels, hidden_channels),
+            nn.Conv2d(hidden_channels, hidden_channels, kernel_size=1),
             nn.ELU(inplace=False),
             nn.Conv2d(hidden_channels, out_channels, kernel_size=1),
         )

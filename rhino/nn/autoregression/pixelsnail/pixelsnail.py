@@ -1,22 +1,41 @@
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from rhino.nn.autoregression.shared.ops.masked_conv2d import MaskedConv2d
-from rhino.nn.autoregression.shared.res_mask_block import ResMaskedBlock
+# Local imports (assume same folder) — adjust path as needed in your project.
+from rhino.nn.autoregression.shared.masked_conv2d import MaskedConv2d
+from rhino.nn.autoregression.pixelsnail.pixelsnail_modules import PixelSNAILBlock
 
-class PixelCNN(nn.Module):
-    
+class PixelSNAIL(nn.Module):
+    """
+    PixelSNAIL-style autoregressive image model.
+
+    Inputs:
+        vocab_size: number of discrete values per channel (e.g., 256 for 8-bit)
+        in_channels: number of data channels (e.g., 3 for RGB)
+        hidden_channels: model width
+        n_blocks: number of PixelSNAIL residual blocks
+        kernel_size: masked conv kernel for the gated branch inside each block
+        embed_dim: per-value embedding dimension (shared across channels)
+        heads: number of attention heads
+        attn_dim: internal attention model dim (defaults to hidden_channels)
+        dropout: dropout for residual paths
+        attn_dropout: dropout inside attention weights
+    """
     def __init__(
         self,
         vocab_size: int,
-        in_channels: int,           # data channels C
-        hidden_channels: int = 540, # prefer divisible by C (for even typing)
-        n_blocks: int = 6,
+        in_channels: int,
+        hidden_channels: int = 384,
+        n_blocks: int = 8,
         kernel_size: int = 3,
         embed_dim: int = 32,
+        heads: int = 8,
+        attn_dim: int | None = None,
         dropout: float = 0.0,
+        attn_dropout: float = 0.0,
     ):
         super().__init__()
         assert vocab_size >= 2
@@ -30,13 +49,12 @@ class PixelCNN(nn.Module):
         self.C = in_channels
         self.HC = hidden_channels
         self.E = embed_dim
-        self.p_drop = float(dropout)
 
         # ---- Per-value embedding shared across channels ----
         # Applied independently to each (B,C,H,W) integer.
         self.embedding = nn.Embedding(self.V, self.E)
 
-        # Type map for the first layer inputs: [RGB,RGB,RGB,...] (E times), is it E*C in size?
+        # Type map for the first layer inputs: [0..C-1] repeated E times
         type_map_in_first = torch.arange(self.C).repeat(self.E)
 
         # ---- First layer: Mask A (no self-connection at the center) ----
@@ -51,12 +69,23 @@ class PixelCNN(nn.Module):
         )
         self.act_in = nn.ReLU(inplace=True)
 
-        # ---- n_blocks of Mask-B 3x3 ----
-        self.blocks = nn.Sequential(*[ResMaskedBlock(self.HC, k=7, n_types=self.C, p=0.0)
-                                for _ in range(n_blocks)])
+        # ---- PixelSNAIL residual blocks (attention + gated masked conv) ----
+        blocks = []
+        for _ in range(n_blocks):
+            blocks.append(
+                PixelSNAILBlock(
+                    channels=self.HC,
+                    n_types=self.C,
+                    kernel_size=kernel_size,
+                    heads=heads,
+                    attn_dim=attn_dim if attn_dim is not None else self.HC,
+                    attn_dropout=attn_dropout,
+                    dropout=dropout,
+                )
+            )
+        self.blocks = nn.Sequential(*blocks)
 
-
-        # Type map for the output layer: [RGB,RGB,RGB,...] (V times), is it V*C in size?
+        # Type map for the output layer: [0..C-1] repeated V times
         type_map_out_head = torch.arange(self.C).repeat(self.V)
         self.head = MaskedConv2d(
             mask_type='B',
@@ -98,12 +127,11 @@ class PixelCNN(nn.Module):
         eh = self.embedding(rearrange(x, 'b c h w -> b (h w) c'))  # B C H W -> B, H*W, C, E
         z = rearrange(eh, 'b (h w) c e -> b (e c) h w', h=H, w=W)  # B, H*W, C, E -> B, E*C, H, W
 
-        h = self.act_in(self.conv_in(z)) # [RGB]*emb -> R->G->B casual_masking -> [RGB]*hidden
+        h = self.act_in(self.conv_in(z))
 
         h = self.blocks(h)
 
-        logits_VCHW = self.head(h)       # [RGB]*emb -> R->G->B casual_masking -> [RGB]*vocab
-
+        logits_VCHW = self.head(h)
         logits = rearrange(logits_VCHW, "b (v c) h w -> b v c h w", c=C, v=self.V)
 
         return logits
@@ -137,7 +165,6 @@ class PixelCNN(nn.Module):
         for y in range(H):
             for xcol in range(W):
                 for c in range(C):
-
                     logits_BVCHW = self.forward(x)                # (B, V, C, H, W)
                     logits_c = logits_BVCHW[:, :, c, y, xcol]     # (B, V)
 
@@ -162,14 +189,17 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     B, C, H, W = 2, 3, 16, 16
 
-    model = PixelCNN(
+    model = PixelSNAIL(
         vocab_size=256,
         in_channels=C,
-        hidden_channels=120,   # divisible by 3
+        hidden_channels=192,   # divisible by C
         n_blocks=4,
         kernel_size=5,
         embed_dim=32,
+        heads=4,
+        attn_dim=192,
         dropout=0.0,
+        attn_dropout=0.0,
     ).to(device)
     model.eval()
 
@@ -178,7 +208,7 @@ if __name__ == "__main__":
     logits = model(x)
     print("logits shape:", tuple(logits.shape))  # (B, V, C, H, W)
 
-    # simple structural causality check (no dependence on future pixels / later channels)
+    # structural causality check (no dependence on future pixels / later channels)
     y0, x0, ch = H // 2, W // 2, 1
     base = logits[0, :, ch, y0, x0].detach()
 
@@ -195,4 +225,3 @@ if __name__ == "__main__":
 
     diff = (base - test).abs().max().item()
     print("causal_diff:", diff)  # should be ~0 (exact 0 in float32 with these masks)
-

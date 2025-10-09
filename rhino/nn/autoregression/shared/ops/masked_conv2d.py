@@ -1,8 +1,15 @@
+
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 class MaskedConv2d(nn.Conv2d):
+    """
+    Exactly the same semantics as the user's MaskedConv2d with type gating:
+    - "A": strictly earlier spatial positions; center uses < for channel order
+    - "B": strictly earlier spatial positions; center uses <= for channel order
+    """
     def __init__(self, mask_type: str,
                  in_channels: int, out_channels: int,
                  kernel_size: int | tuple[int, int] = 3,
@@ -38,7 +45,7 @@ class MaskedConv2d(nn.Conv2d):
         else:
             t_in = torch.as_tensor(type_map_in, dtype=torch.long)
             assert t_in.numel() == in_channels
-        
+
         if type_map_out is None:
             t_out = torch.arange(out_channels) % n_types        # [Cout]
         else:
@@ -60,15 +67,3 @@ class MaskedConv2d(nn.Conv2d):
     def forward(self, x):
         return F.conv2d(x, self.weight * self.mask, self.bias,
                         self.stride, self.padding, self.dilation, self.groups)
-
-class ResMaskedBlock(nn.Module):
-    def __init__(self, C, k=7, n_types=3, p=0.0):
-        super().__init__()
-        self.conv1 = MaskedConv2d('B', C, C, k, n_types=n_types)
-        self.act1  = nn.ReLU(inplace=True)
-        self.conv2 = MaskedConv2d('B', C, C, k, n_types=n_types)
-        self.drop  = nn.Dropout2d(p) if p > 0 else nn.Identity()
-    def forward(self, x):
-        h = self.act1(self.conv1(x))
-        h = self.drop(self.conv2(h))
-        return F.relu(x + h)

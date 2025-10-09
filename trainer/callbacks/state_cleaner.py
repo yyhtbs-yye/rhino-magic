@@ -1,4 +1,4 @@
-from trainer.callback_template import Callback
+from trainer.callbacks.callback_template import Callback
 import os
 
 class KeepTopKStateCallback(Callback):

@@ -1,5 +1,5 @@
 
-from trainer.callback_template import Callback
+from trainer.callbacks.callback_template import Callback
 
 # === Example callback implementations ===
 class LoggingCallback(Callback):

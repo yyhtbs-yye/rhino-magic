@@ -28,6 +28,7 @@ class WeightedLoss(nn.Module):
             weights (Tensor): Sample weights (shape: batch_size,)
         """
         # Compute per-element loss
+
         elementwise_loss = self.base_loss_fn(preds, targets)
 
         # Reduce over all but the batch dimension

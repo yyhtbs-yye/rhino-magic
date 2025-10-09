@@ -5,35 +5,33 @@ boat:
 
   models:
     net:
-      path: 'rhino.nn.autoregression.pixelcnnpp.pixelcnnpp'
-      name: 'PixelCNNPP'
+      path: 'rhino.nn.autoregression.pixelsnail.pixelsnail'
+      name: 'PixelSNAIL'
       params:
+        vocab_size: 256
         kernel_size: $kernel_size
         in_channels: $in_channels
         hidden_channels: $hidden_channels
-        n_blocks: $n_blocks
-        nr_mix: $nr_mix
   
   losses: 
     net:
-      path: 'rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_loss'
-      name: 'DMOLNLLoss'
+      path: 'rhino.nn.losses.wrappers.pixel_loss'
+      name: 'PixelLoss'
       params: 
-        in_channels: $in_channels
-        nr_mix: $nr_mix
+        base_loss_fn_str: ce
 
 optimization: 
   net:
     path: 'torch.optim'
     name: 'Adam'
     params:
-      lr: 0.0003
+      lr: 0.0001
       betas: [0.9, 0.999]
       weight_decay: 0.0
     lr_scheduler: {}
     
   use_ema:
-    ema_decay: 0.9995
+    ema_decay: 0.999
     ema_start: $ema_start
 
 logging:
@@ -54,7 +52,7 @@ trainer:
   state_save_epochs: 1
   visualization:
     save_images: true
-    wnb: [0.5, 0.5]  # for visualization
+    wnb: [0.0, 1.0]  # for visualization
 
 validation: 
   save_images: true
@@ -77,17 +75,14 @@ data:
         path: 'trainer.torch_datasets.basic_image_dataset'
         name: 'BasicImageDataset'         # Name of the model class to use
         params:
-          max_dataset_size: 256
+          # max_dataset_size: 256
           folder_paths: $train_folder_paths
           data_prefix:
             gt: ''
           pipeline:
             - type: LoadImageFromFile
               keys: [gt]
-            - type: Normalize
-              keys: [gt]
-              mean: [0.5, 0.5, 0.5]
-              std: [0.5, 0.5, 0.5]
+              use_long: true
       batch_size: $train_batch_size
       num_workers: $num_workers
       pin_memory: false
@@ -109,10 +104,7 @@ data:
           pipeline:
             - type: LoadImageFromFile
               keys: [gt]
-            - type: Normalize
-              keys: [gt]
-              mean: [0.5, 0.5, 0.5]
-              std: [0.5, 0.5, 0.5]
+              use_long: true
       batch_size: $valid_batch_size
       num_workers: $num_workers
       pin_memory: false
@@ -130,18 +122,16 @@ callbacks:
 
 _vars:
 
-  devices: [0, 1, 4, 5]
+  devices: [0, 1]
 
   train_batch_size: 64
   valid_batch_size: 8
   num_workers: 16
-  
 
+  # vocab_size: 256
   in_channels: 3
-  kernel_size: 3
-  hidden_channels: 256
-  n_blocks: 12
-  nr_mix: 10
+  kernel_size: 9
+  hidden_channels: 384
 
   train_folder_paths:
     gt: data/ffhq/ffhq_imgs/ffhq_32
@@ -149,6 +139,6 @@ _vars:
   valid_folder_paths:
     gt: data/celeba/subsets/celeba_32
 
-  experiment_name: pixelcnnpp_ffhq_32
+  experiment_name: pixelsnail_ffhq_32
 
   ema_start: 0

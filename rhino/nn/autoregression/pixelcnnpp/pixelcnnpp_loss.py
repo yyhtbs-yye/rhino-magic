@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 
-from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_utils import _split_params
+from rhino.nn.autoregression.utils.sample_from_discretized_mix_logistic import _split_params
 
 class DMOLNLLoss(torch.nn.Module):
     """Discretized Mixture of Logistics (DMOL) negative log-likelihood loss. """
