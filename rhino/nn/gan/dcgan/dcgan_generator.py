@@ -1,4 +1,4 @@
-import numpy as np
+import math
 import torch
 import torch.nn as nn
 
@@ -19,7 +19,7 @@ class DCGANGenerator(nn.Module):
         self.init_cfg = None
 
         # the number of times for upsampling
-        self.num_upsamples = int(np.log2(output_scale // input_scale))
+        self.num_upsamples = int(math.log2(output_scale // input_scale))
 
         # output 4x4 feature map
         self.noise2feat = ConvModule(

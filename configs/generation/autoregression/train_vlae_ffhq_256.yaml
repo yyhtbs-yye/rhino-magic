@@ -6,7 +6,7 @@ boat:
   models:
     net:
       path: 'rhino.nn.autoregression.pixelcnnpp.pixelcnnpp'
-      name: 'PixelCNNPP'
+      name: 'PixelCNNPlusPlus'
       params:
         kernel_size: $kernel_size
         in_channels: $in_channels

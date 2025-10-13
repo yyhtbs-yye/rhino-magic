@@ -1,5 +1,6 @@
 import numpy as np
 import torch.nn as nn
+
 from rhino.baked_nn.bcv.conv_module import ConvModule
 
 class DCGANDiscriminator(nn.Module):

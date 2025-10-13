@@ -5,7 +5,7 @@ boat:
 
   models:
     net:
-      path: 'rhino.nn.autoregression.pixelsnail.pixelsnail'
+      path: 'rhino.nn.autoregression.model_zoo.pixelsnail'
       name: 'PixelSNAIL'
       params:
         vocab_size: 256
@@ -122,7 +122,7 @@ callbacks:
 
 _vars:
 
-  devices: [0, 1]
+  devices: [0, 1, 2, 3]
 
   train_batch_size: 64
   valid_batch_size: 8
@@ -130,7 +130,7 @@ _vars:
 
   # vocab_size: 256
   in_channels: 3
-  kernel_size: 9
+  kernel_size: 3
   hidden_channels: 384
 
   train_folder_paths:

@@ -2,7 +2,7 @@
 import time
 import torch
 
-from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp import PixelCNNPP
+from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp import PixelCNNPlusPlus
 from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_loss import discretized_mix_logistic_loss
 
 def total_parameters(model: torch.nn.Module) -> int:
@@ -17,7 +17,7 @@ def test_forward_and_backward_rgb():
     torch.manual_seed(0)
     device = torch.device("cpu")
 
-    model = PixelCNNPP(
+    model = PixelCNNPlusPlus(
         in_channels=3,
         hidden_channels=64,
         n_blocks=2,
@@ -59,7 +59,7 @@ def test_sampling_small_rgb():
     torch.manual_seed(123)
     device = torch.device("cpu")
 
-    model = PixelCNNPP(
+    model = PixelCNNPlusPlus(
         in_channels=3,
         hidden_channels=64,
         n_blocks=2,
@@ -83,7 +83,7 @@ def test_forward_and_sampling_gray():
     torch.manual_seed(7)
     device = torch.device("cpu")
 
-    model = PixelCNNPP(
+    model = PixelCNNPlusPlus(
         in_channels=1,
         hidden_channels=48,
         n_blocks=2,

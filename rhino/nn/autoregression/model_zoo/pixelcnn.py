@@ -4,7 +4,10 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from rhino.nn.autoregression.shared.ops.masked_conv2d import MaskedConv2d
-from rhino.nn.autoregression.shared.res_mask_block import ResMaskedBlock
+from rhino.nn.autoregression.shared.blocks.res_masked_conv_block import ResMaskedConvBlock
+from rhino.nn.autoregression.shared.backbones.spatial_channel_ar_conv_backbone import SpatialChannelARConvBackbone
+
+from rhino.nn.autoregression.utils.sample_from_logits import sample
 
 class PixelCNN(nn.Module):
     
@@ -32,32 +35,19 @@ class PixelCNN(nn.Module):
         self.E = embed_dim
         self.p_drop = float(dropout)
 
-        # ---- Per-value embedding shared across channels ----
-        # Applied independently to each (B,C,H,W) integer.
-        self.embedding = nn.Embedding(self.V, self.E)
-
-        # Type map for the first layer inputs: [RGB,RGB,RGB,...] (E times), is it E*C in size?
-        type_map_in_first = torch.arange(self.C).repeat(self.E)
-
-        # ---- First layer: Mask A (no self-connection at the center) ----
-        self.conv_in = MaskedConv2d(
-            mask_type='A',
-            in_channels=self.C * self.E,
-            out_channels=self.HC,
+        self.backbone = SpatialChannelARConvBackbone(
+            vocab_size=vocab_size,
+            in_channels=in_channels,            # data channels C
+            hidden_channels=hidden_channels,    # prefer divisible by C (for even typing)
+            n_blocks=n_blocks,
             kernel_size=kernel_size,
-            n_types=self.C,
-            type_map_in=type_map_in_first
-            # type_map_out left as cyclic by C (ok for hidden)
+            embed_dim=embed_dim,
+            dropout=dropout,
         )
-        self.act_in = nn.ReLU(inplace=True)
-
-        # ---- n_blocks of Mask-B 3x3 ----
-        self.blocks = nn.Sequential(*[ResMaskedBlock(self.HC, k=7, n_types=self.C, p=0.0)
-                                for _ in range(n_blocks)])
-
 
         # Type map for the output layer: [RGB,RGB,RGB,...] (V times), is it V*C in size?
         type_map_out_head = torch.arange(self.C).repeat(self.V)
+
         self.head = MaskedConv2d(
             mask_type='B',
             in_channels=self.HC,
@@ -91,69 +81,26 @@ class PixelCNN(nn.Module):
         """
         assert x.dtype == torch.long, "Expect LongTensor with class indices."
         if x.dim() == 3:
-            x = x.unsqueeze(1)  # (B, 1, H, W) for grayscale images
+            x = x.unsqueeze(1)              # (B, 1, H, W) for grayscale images
 
         B, C, H, W = x.shape
 
-        eh = self.embedding(rearrange(x, 'b c h w -> b (h w) c'))  # B C H W -> B, H*W, C, E
-        z = rearrange(eh, 'b (h w) c e -> b (e c) h w', h=H, w=W)  # B, H*W, C, E -> B, E*C, H, W
+        h = self.backbone(x)
 
-        h = self.act_in(self.conv_in(z)) # [RGB]*emb -> R->G->B casual_masking -> [RGB]*hidden
+        logits = self.head(h)               # [RGB]*emb -> R->G->B casual_masking -> [RGB]*vocab
 
-        h = self.blocks(h)
-
-        logits_VCHW = self.head(h)       # [RGB]*emb -> R->G->B casual_masking -> [RGB]*vocab
-
-        logits = rearrange(logits_VCHW, "b (v c) h w -> b v c h w", c=C, v=self.V)
+        if logits.dim == 4:
+            logits = rearrange(logits, "b (v c) h w -> b v c h w", c=C, v=self.V)
+        elif logits.dim == 5:
+            pass
+        else:
+            raise RuntimeError(f"Unexpected logits dimension: {logits.dim}")
 
         return logits
 
-    # ----- sampling -----
     @torch.no_grad()
-    def sample(self, x0: torch.Tensor, temperature: float = 1.0, greedy: bool = False) -> torch.Tensor:
-        """
-        Autoregressive sampling in raster order, channel order 0..C-1.
-
-        Args:
-            x0 : (B, C, H, W) Long. Use >=0 to keep a value fixed, <0 to fill.
-            temperature : float > 0
-            greedy : if True, take argmax; else sample from softmax
-
-        Returns:
-            (B, C, H, W) Long in [0, V-1]
-        """
-        self.eval()
-        device = next(self.parameters()).device
-        x = x0.to(device)
-        if x.dtype != torch.long:
-            x = x.long()
-
-        B, C, H, W = x.shape
-        V = self.V
-
-        fixed = (x >= 0)
-        x = torch.where(fixed, x, torch.zeros_like(x))
-
-        for y in range(H):
-            for xcol in range(W):
-                for c in range(C):
-
-                    logits_BVCHW = self.forward(x)                # (B, V, C, H, W)
-                    logits_c = logits_BVCHW[:, :, c, y, xcol]     # (B, V)
-
-                    if temperature != 1.0:
-                        logits_c = logits_c / float(max(1e-8, temperature))
-
-                    if greedy:
-                        next_val = logits_c.argmax(dim=-1)        # (B,)
-                    else:
-                        probs = F.softmax(logits_c, dim=-1)
-                        probs = torch.nan_to_num(probs, nan=0.0)
-                        next_val = torch.multinomial(probs, num_samples=1).squeeze(1)
-
-                    x[:, c, y, xcol] = next_val
-
-        return x
+    def sample(self, x0, temperature=1.0, greedy=False):
+        return sample(model=self, x0=x0, temperature=temperature, greedy=greedy)
 
 # -------------------------
 # Tiny demo / causality test

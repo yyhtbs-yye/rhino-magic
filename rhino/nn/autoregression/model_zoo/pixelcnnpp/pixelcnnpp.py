@@ -6,7 +6,7 @@ from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_modules import ShiftedConv2d,
 from rhino.nn.autoregression.pixelcnnpp.pixelcnnpp_utils import get_n_out_channels_for_dmol
 from rhino.nn.autoregression.utils.sample_from_discretized_mix_logistic import sample_from_discretized_mix_logistic
 
-class PixelCNNPP(nn.Module):
+class PixelCNNPlusPlus(nn.Module):
     """
     PixelCNN++ with shifted convolutions (no masks), dual stacks (down & downright), and DMOL output head.
 
@@ -159,7 +159,7 @@ def assert_pixelcnnpp_causality(
          are identically zero (up to small tolerances).
 
     Args:
-        model:       Your PixelCNNPP instance (should be on the intended device).
+        model:       Your PixelCNNPlusPlus instance (should be on the intended device).
         in_channels: Number of input channels the model expects.
         H, W:        Spatial size to test with (kept modest to keep the test fast).
         positions:   0 to test all H*W positions, or a positive integer to test a random subset.
@@ -264,7 +264,7 @@ def assert_pixelcnnpp_causality(
 # --- Optional smoke test ---
 if __name__ == "__main__":
     # Example usage with your class:
-    model = PixelCNNPP(in_channels=3, hidden_channels=64, n_blocks=4, kernel_size=3, dropout=0.0, nr_mix=5).to("cuda")
+    model = PixelCNNPlusPlus(in_channels=3, hidden_channels=64, n_blocks=4, kernel_size=3, dropout=0.0, nr_mix=5).to("cuda")
     res = assert_pixelcnnpp_causality(model, in_channels=3, H=9, W=9, positions=40, seed=0)
     print(res["passed"], f"violations: {len(res['violations'])}")
     # pass

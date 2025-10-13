@@ -13,7 +13,7 @@ class MaskedConv2d(nn.Conv2d):
     def __init__(self, mask_type: str,
                  in_channels: int, out_channels: int,
                  kernel_size: int | tuple[int, int] = 3,
-                 *, n_types: int = 3,
+                 *, enable_channel_causality=True, n_types: int = 3,
                  type_map_in: torch.Tensor | None = None,
                  type_map_out: torch.Tensor | None = None,
                  bias: bool = True, **kwargs):
@@ -40,29 +40,39 @@ class MaskedConv2d(nn.Conv2d):
 
         # --- 2) Channel gating at the center position only ---
         # Build type labels for input/output channels.
-        if type_map_in is None:
-            t_in = torch.arange(in_channels) % n_types          # [Cin]
+
+        if enable_channel_causality:        
+            if type_map_in is None:
+                t_in = torch.arange(in_channels) % n_types              # [Cin]
+            else:
+                t_in = torch.as_tensor(type_map_in, dtype=torch.long)
+                assert t_in.numel() == in_channels
+
+            if type_map_out is None:
+                t_out = torch.arange(out_channels) % n_types            # [Cout]
+            else:
+                t_out = torch.as_tensor(type_map_out, dtype=torch.long)
+                assert t_out.numel() == out_channels
+
+            if mask_type == "A":
+                center_ok = (t_in[None, :] <  t_out[:, None]).float()   # [Cout, Cin]
+            else:  # "B"
+                center_ok = (t_in[None, :] <= t_out[:, None]).float()
+
+            mask[:, :, yc, xc] = center_ok
+
+            self.n_types = n_types
+            self.register_buffer("type_map_in_buf", t_in)
+            self.register_buffer("type_map_out_buf", t_out)
         else:
-            t_in = torch.as_tensor(type_map_in, dtype=torch.long)
-            assert t_in.numel() == in_channels
-
-        if type_map_out is None:
-            t_out = torch.arange(out_channels) % n_types        # [Cout]
-        else:
-            t_out = torch.as_tensor(type_map_out, dtype=torch.long)
-            assert t_out.numel() == out_channels
-
-        if mask_type == "A":
-            center_ok = (t_in[None, :] <  t_out[:, None]).float()   # [Cout, Cin]
-        else:  # "B"
-            center_ok = (t_in[None, :] <= t_out[:, None]).float()
-
-        mask[:, :, yc, xc] = center_ok
+            # SPATIAL-ONLY causality:
+            # Mask A must not see the current pixel at all (any channel)
+            # Mask B may see it.
+            if mask_type == "A":
+                mask[:, :, yc, xc] = 0.0
+            # for "B" we leave the center as 1.0
 
         self.register_buffer("mask", mask)
-        self.n_types = n_types
-        self.register_buffer("type_map_in_buf", t_in)
-        self.register_buffer("type_map_out_buf", t_out)
 
     def forward(self, x):
         return F.conv2d(x, self.weight * self.mask, self.bias,

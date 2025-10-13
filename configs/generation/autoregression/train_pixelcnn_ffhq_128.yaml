@@ -5,7 +5,7 @@ boat:
 
   models:
     net:
-      path: 'rhino.nn.autoregression.pixelcnn.pixelcnn'
+      path: 'rhino.nn.autoregression.model_zoo.pixelcnn'
       name: 'PixelCNN'
       params:
         vocab_size: 256

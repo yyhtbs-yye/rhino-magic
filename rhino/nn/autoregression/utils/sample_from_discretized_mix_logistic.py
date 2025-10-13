@@ -1,85 +1,61 @@
-
 import torch
 import torch.nn.functional as F
 
 @torch.no_grad()
-def sample_from_discretized_mix_logistic(
-    params: torch.Tensor,
-    nr_mix: int,
-    in_channels: int,
-    *,
-    coupled: bool = False,
-) -> torch.Tensor:
+def sample(model, x0: torch.Tensor, *, coupled: bool = False, device=None) -> torch.Tensor:
     """
-    Sample from a DMoL head with arbitrary channels.
-
-    Args:
-      params: (B, n_out, H, W)
-      nr_mix: number of mixtures, K
-      in_channels: number of channels, C
-      coupled: if True, sample channels sequentially with triangular coupling:
-               mean[c] <- mean[c] + sum_{j < c} coeff[c,j] * x[j]
-
-    Returns:
-      x: (B, C, H, W) in [-1, 1]
+    Raster-scan DMoL sampling.
+    x0: (B, C, H, W) canvas (e.g., zeros). Returns x in [-1,1].
     """
-    # Split params using the generalized splitter that supports `coupled`
-    logit_probs, means, log_scales, coeffs = _split_params(
-        params, nr_mix, in_channels, coupled=coupled
-    )  # shapes: (B,K,H,W), (B,K,C,H,W), (B,K,C,H,W), (B,K,n_coeff,H,W)|None
+    x = x0.clone()
+    B, C, H, W = x.shape
+    K = model.nr_mix
 
-    B, K, H, W = logit_probs.shape
-    C = in_channels
+    for y in range(H):
+        for xcol in range(W):
+            params = model(x)  # (B, n_out, H, W)
 
-    # Gumbel-max to pick mixture component per pixel
-    u = torch.rand_like(logit_probs)
-    g = -torch.log(-torch.log(torch.clamp(u, 1e-6, 1 - 1e-6)))
-    sel = torch.argmax(logit_probs + g, dim=1)                           # (B,H,W)
-    one_hot = F.one_hot(sel, num_classes=K).permute(0, 3, 1, 2).float()  # (B,K,H,W)
+            logit_probs, means, log_scales, coeffs = _split_params(
+                params, model.nr_mix, model.in_channels, coupled=coupled
+            )  # (B,K,H,W), (B,K,C,H,W), (B,K,C,H,W), (B,K,n_coeff,H,W)|None
 
-    def _pick(x: torch.Tensor) -> torch.Tensor:
-        # If x is (B,K,H,W) -> (B,H,W); if (B,K,C,H,W) -> (B,C,H,W); if (B,K,N,H,W) -> (B,N,H,W)
-        if x.dim() == 4:
-            return torch.sum(x * one_hot, dim=1)
-        elif x.dim() == 5:
-            return torch.sum(x * one_hot.unsqueeze(2), dim=1)
-        else:
-            raise ValueError("Unexpected tensor rank in pick().")
+            # mixture choice per pixel (Gumbel-max)
+            u = torch.rand_like(logit_probs)
+            g = -torch.log(-torch.log(torch.clamp(u, 1e-6, 1 - 1e-6)))
+            sel = torch.argmax(logit_probs + g, dim=1)                           # (B,H,W)
+            one_hot = F.one_hot(sel, num_classes=K).permute(0, 3, 1, 2).float()  # (B,K,H,W)
 
-    m = _pick(means)                         # (B,C,H,W)
-    logs = torch.clamp(_pick(log_scales), min=-7.0)  # (B,C,H,W), clamp for stability
+            # pick params for the chosen mixture
+            m    = (means      * one_hot.unsqueeze(2)).sum(dim=1)    # (B,C,H,W)
+            logs = (log_scales * one_hot.unsqueeze(2)).sum(dim=1)    # (B,C,H,W)
+            logs = torch.clamp(logs, min=-7.0)
 
-    def _sample_logistic(mu: torch.Tensor, log_s: torch.Tensor) -> torch.Tensor:
-        u = torch.rand_like(mu)
-        return mu + torch.exp(log_s) * (torch.log(torch.clamp(u, 1e-6, 1-1e-6)) -
-                                        torch.log(torch.clamp(1 - u, 1e-6, 1-1e-6)))
+            if not coupled:
+                # independent channels
+                u = torch.rand(B, C, device=x.device)
+                eps = torch.log(torch.clamp(u, 1e-6, 1-1e-6)) - torch.log(torch.clamp(1-u, 1e-6, 1-1e-6))
+                x[:, :, y, xcol] = m[:, :, y, xcol] + torch.exp(logs[:, :, y, xcol]) * eps
+            else:
+                # triangular coupling: mu_c += sum_{j<c} coeff[c,j] * x_j
+                co_sel = (coeffs * one_hot.unsqueeze(2)).sum(dim=1)   # (B, n_coeff, H, W)
+                offset = 0
+                for c_idx in range(C):
+                    mu_c   = m[:, c_idx, y, xcol]
+                    log_c  = logs[:, c_idx, y, xcol]
+                    if c_idx > 0:
+                        n_c   = c_idx
+                        co_c  = co_sel[:, offset:offset+n_c, y, xcol]   # (B, c_idx)
+                        prev  = x[:, :c_idx, y, xcol]                   # (B, c_idx)
+                        mu_c  = mu_c + (co_c * prev).sum(dim=1)
+                        offset += n_c
+                    u = torch.rand_like(mu_c)
+                    eps = torch.log(torch.clamp(u, 1e-6, 1-1e-6)) - torch.log(torch.clamp(1-u, 1e-6, 1-1e-6))
+                    x[:, c_idx, y, xcol] = mu_c + torch.exp(log_c) * eps
 
-    if not coupled:
-        # Independent channels (recommended for latents)
-        eps = torch.log(torch.clamp(torch.rand_like(m), 1e-6, 1-1e-6)) - \
-              torch.log(torch.clamp(1 - torch.rand_like(m), 1e-6, 1-1e-6))
-        # Use a single u per element for proper logistic noise:
-        u = torch.rand_like(m)
-        eps = torch.log(torch.clamp(u, 1e-6, 1-1e-6)) - torch.log(torch.clamp(1 - u, 1e-6, 1-1e-6))
-        x = m + torch.exp(logs) * eps
-    else:
-        # Triangular coupling: coeffs for selected mixture -> (B, n_coeff, H, W)
-        co_sel = _pick(coeffs)               # None if C==1; else (B, C*(C-1)/2, H, W)
-        x = torch.zeros_like(m)
-        offset = 0
-        for c in range(C):
-            mu_c = m[:, c]                 # (B,H,W)
-            log_s_c = logs[:, c]
-            if c > 0:
-                n_c = c
-                co_c = co_sel[:, offset:offset + n_c]  # (B,c,H,W), order: (c←0),(c←1),...,(c←c-1)
-                offset += n_c
-                # Sum_j< c coeff[c,j] * x_j
-                adj = (co_c * x[:, :c]).sum(dim=1)     # (B,H,W)
-                mu_c = mu_c + adj
-            x[:, c] = _sample_logistic(mu_c, log_s_c)
+            x[:, :, y, xcol] = torch.clamp(x[:, :, y, xcol], -1.0, 1.0)
 
-    return torch.clamp(x, -1.0, 1.0)
+    return x
+
 
 def _split_params(params: torch.Tensor, nr_mix: int, in_channels: int, *, coupled: bool = False):
     """
