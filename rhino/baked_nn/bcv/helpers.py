@@ -393,7 +393,7 @@ class PixelShufflePack(nn.Module):
 _UPSAMPLE_LAYERS = {
     'nearest': nn.Upsample,       # will set mode='nearest' below
     'bilinear': nn.Upsample,      # will set mode='bilinear' below
-    'pixel_shuffle': PixelShufflePack,
+    'pixel_shuffle': nn.PixelShuffle,
 }
 
 

@@ -1,12 +1,7 @@
 import torch
 from typing import Optional
-
 from diffusers.models import DiTTransformer2DModel
 
-
-# ---------------------------------------------------------------------
-# 1.  Concatenation-based conditioning for DiT
-# ---------------------------------------------------------------------
 class DiTConcatConditionModel(DiTTransformer2DModel):
     """
     DiT variant that conditions by **channel-wise concatenation**.
@@ -83,10 +78,6 @@ class DiTConcatConditionModel(DiTTransformer2DModel):
             **kwargs,
         )
 
-
-# ---------------------------------------------------------------------
-# 2.  Factory / wrapper
-# ---------------------------------------------------------------------
 class DiT2DFlexibleWrapper:
     """
     Tiny convenience factory that mirrors your UNet helper.
